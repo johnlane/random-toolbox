@@ -1,0 +1,63 @@
+#!/bin/bash
+#################################################################
+#                                                               #
+# Download today's "Astronomy Picture of the Day"               #
+# from NASA and set it as wallpaper.                            #
+#                                                               #
+#                                                   JL 20130117 #
+#                                                               #
+#################################################################
+
+# main US site and UK mirror
+us_site_url="http://apod.nasa.gov/apod"
+uk_site_url="http://www.star.ucl.ac.uk/~apod/apod"
+
+# select site
+site_url=${uk_site_url}
+
+# Default to today's image
+# or specified day in $1, format yymmdd (e.g. 121124)
+# Images are organised by year+month (e.g. 1301 is January 2013)
+if [[ -n $1 ]]; then
+
+    page="ap${1}.html"
+    period=${1:0:4}
+
+else
+
+    page="astropix.html"
+    period=$(date +%g%m)
+
+fi
+
+# directory where downloaded images are stored
+# write access to this directory is required
+#local_image_dir=$(dirname "$(realpath "$0")")/${period}
+local_image_dir=/usr/share/wallpaper/apod/${period}
+mkdir -p "${local_image_dir}"
+
+# Look for an image URL on the site web page
+image_path=$(curl -s "${site_url}/${page}" | grep "<a href=\"image/${period}/[^ \">]*.jpg\">" | awk -F '"' '{print $2}')
+
+# is there an image on the site today? (sometimes a video is there instead)
+if [[ -n ${image_path} ]]; then
+
+    # the local copy of the downloaded image
+    local_image_path="${local_image_dir}/$(basename ${image_path})"
+
+    # download the image if it is not there
+    if [[ ! -f "${local_image_path}" ]]; then
+
+        # The image file
+        ( cd "${local_image_dir}" && wget -q "${site_url}/${image_path}" )
+
+        # The accompanying text 
+        explanation=$(curl -s "${site_url}/${page}" | sed -n -e '1,/<b> Explanation: <\/b>/d;/<p> <CENTER>/q;p' | sed -e 's/<[a-zA-Z\/][^>]*>//g' )
+        echo $explanation | sed -e 's/<[a-zA-Z\/][^>]*>//g' > "${local_image_path}.txt"
+
+    fi
+
+    # display it
+    feh --bg-center "${local_image_path}"
+
+fi

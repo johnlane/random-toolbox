@@ -1,0 +1,176 @@
+#!/usr/bin/env python2
+#
+LICENSE="""
+Copyright (c) 2013 John Lane
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+http://www.opensource.org/licenses/mit-license.php
+"""
+
+DESCRIPTION="""
+telscript : Execute a script over telnet
+
+Establishes a telnet session to a remote host and executes a series
+of commands there.
+
+You can write commands in a script and then execute it 
+
+    $ telscript < script
+
+Or, most probably:
+
+    $ telscript -n myhost -u myusername -p mypassword < script
+
+You can add a "shebang" to the script file of the form:
+
+    #!/usr/bin/telscript -n myhost -u myusername -p mypassword
+
+and make it executable `chmod +x myscript` then you can
+execute it directly:
+
+    $ ./myscript
+
+For command help:
+
+    $ telscript --help
+
+                   (c) John Lane 2013-02-02.
+                Licensed under the MIT License. 
+
+              https://github.com/johnlane/telscript
+
+"""
+
+# References:
+#
+import sys
+import atexit
+import telnetlib
+import socket
+import argparse
+import re
+import os
+
+def abort(error_message):
+    sys.exit("%s. Cannot continue." % error_message)
+
+##############################################################################################
+# A very primitive message logger
+LOG_DEBUG = 'debug'
+LOG_VERBOSE = 'verbose'
+def verbose(message): log(LOG_VERBOSE,message)
+def debug(message): log(LOG_DEBUG,message)
+def log(level,message):
+    if args.loglevels != None and level in args.loglevels: print "(%s) %s" % (level,message)
+def debug_enabled(): return args.loglevels != None and LOG_DEBUG in args.loglevels
+def verbose_enabled(): return args.loglevels != None and LOG_VERBOSE in args.loglevels
+##############################################################################################
+
+class Telnet(telnetlib.Telnet):
+    pass
+    def readit(self,expected):
+        received = self.read_until(expected,5)
+        if re.search(expected, received, re.IGNORECASE):
+            verbose(received)
+        else:
+            abort("Unexpected reply from server:Expected '%s', got '%s'" % (expected,received))
+
+def main(name, argv):
+
+    def cleanup():
+        try:
+            if tn: tn.close          
+            if input and input is not sys.stdin: input.close()         
+        except NameError:
+            pass # move along, nothing to do
+
+    atexit.register(cleanup)
+
+    # When invoked via a shebang, args are packaged differently to when invoked directly
+    # http://stackoverflow.com/q/14674960/712506
+    if len(argv) >= 2 and name[0] == '/' and os.path.isfile(argv[1]) and os.access(argv[1], os.X_OK):
+        input = open(argv[1])
+        arglist = argv[0].split() + argv[2:]
+    else:
+        arglist = argv
+        input = sys.stdin
+
+    # Arguments
+    global args
+    parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--license', action='store_true', default=False, dest='license',
+                        help='show the MIT License')
+    parser.add_argument('-n', '--hostname', action='store', dest='hostname',
+                        help='Remote host to connect to')
+    parser.add_argument('-u', '--username', action='store', dest='username',
+                        help='Username ')
+    parser.add_argument('-p', '--password', action='store', dest='password',
+                        help='Password')
+    parser.add_argument('-i', '--ignore-regex', action='store', dest='ignore_regex',
+                        help='Regular Expression defining lines in script to be ignored (e.g. comments)')
+    parser.add_argument('-v', '--verbose', action='append_const', const=LOG_VERBOSE, dest='loglevels',
+                        help='Enable verbose message output')
+
+    args = parser.parse_args(arglist)
+
+    if args.license == True:
+        print LICENSE
+	return 0
+
+    username = 'admin'    if args.username == None else args.username
+    password = 'password' if args.password == None else args.password
+    hostname = 'localhost' if args.hostname == None else args.hostname
+    ignore_regex = '^ *[#/!]' if args.ignore_regex == None else args.ignore_regex
+
+    verbose("Hostname: %s" % hostname)
+    verbose("Username: %s" % username)
+    verbose("Password: %s" % password)
+
+    try:
+        tn = Telnet(hostname)
+    except socket.error, e:
+        abort("Could not connect to %s (%s)" % (hostname, e[1]))
+
+    # Send Username and Password
+    tn.readit('Username : ')
+    tn.write(username+ "\r")
+
+    tn.readit("Password : ")
+    tn.write(password+ "\r")
+
+    # Check responses and abort unless prompt receuived
+    match_index, match_object, match_text = tn.expect(['=>','Invalid username/password'],10)
+    if match_index > 0:
+        abort(filter(lambda c: c not in '*\n', match_text))
+
+    # Send each input line in turn, display its output
+    for line in input:
+        line = line.rstrip('\n')
+        if line and re.match(ignore_regex,line) is None:
+            try:
+                tn.write(line + "\r")
+                print tn.read_until('=>')
+            except Exception as e:
+                abort(e[1])
+
+sys.exit(main(sys.argv[0], sys.argv[1:]))
