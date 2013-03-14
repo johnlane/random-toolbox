@@ -51,8 +51,14 @@
 #                                                              #
 #    $ pinpass 12345                                           #
 #                                                              #
-# and pin pass will display the related password along with,   #
+# and pinpass will display the related password along with,    #
 # as an aide-memoire, the four words used to generate it.      #
+#                                                              #
+# Alternatively, if a URL is given then pinpass will generate  #
+# a pin code using a very simple hashing algorithm. This can   #
+# be used as an alternative to remembering pin codes:          #
+#                                                              #
+#    $ pinpass www.example.com                                 #
 #                                                              #
 ################################################################
 
@@ -72,12 +78,20 @@ function pop {
 
 # print help if no arguments
 if [[ $# -eq 0 ]]; then
-    echo "usage: $0 <pin> [phrase-file]"
+    echo "usage: $0 <pin>|<url> [phrase-file]"
     abort "You must specify at least a PIN number"
 fi
 
-# PIN should be a five digit number given in argument #1
-pin=${1}
+# The PIN should be a five digit number given in the first 
+# argument. If this is not a number then assume it is a URL
+# and generate a PIN using a very simple hashing algorithm.
+echo "--->$1<---"
+if [[ ${1} =~ ^[0-9]+$ ]]
+then
+    pin=${1}
+else 
+    printf -v pin "%05d" $(( $(echo ${1} | cksum | awk '{print $1}') % 100000 ))
+fi
 
 # Ensure PIN is a five-digit number
 [[ ${#pin} != 5 ]] && abort "PIN must be five digits"
