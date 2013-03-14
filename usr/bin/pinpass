@@ -85,7 +85,6 @@ fi
 # The PIN should be a five digit number given in the first 
 # argument. If this is not a number then assume it is a URL
 # and generate a PIN using a very simple hashing algorithm.
-echo "--->$1<---"
 if [[ ${1} =~ ^[0-9]+$ ]]
 then
     pin=${1}
@@ -191,3 +190,12 @@ password=${password// /}
 # Display generated password
 #
 echo "${password}"
+
+#
+# If available, use cracklib to verify the quality of the password
+#
+if [[ -x $(which cracklib-check 2>/dev/null) ]]
+then
+    result=$(echo ${password} | cracklib-check | awk -F ':' '{print $2}' | sed 's/^ *//g')
+    [[ ${result} == OK ]] || echo "Warning: ${result}"
+fi
