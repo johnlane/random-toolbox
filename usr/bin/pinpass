@@ -60,6 +60,11 @@
 #                                                              #
 #    $ pinpass www.example.com                                 #
 #                                                              #
+# If a question-mark "?" is given, pinpass will generate a     #
+# random pin code and then display the corresponding password. #
+#                                                              #
+#    $ pinpass ?                                               #
+#                                                              #
 ################################################################
 
 # Simple abortion
@@ -79,15 +84,21 @@ function pop {
 # print help if no arguments
 if [[ $# -eq 0 ]]; then
     echo "usage: $0 <pin>|<url> [phrase-file]"
+    echo "If <pin> is given as a question-mark (?) then"
+    echo "a new pin code will be randomly generated."
     abort "You must specify at least a PIN number"
 fi
 
 # The PIN should be a five digit number given in the first 
-# argument. If this is not a number then assume it is a URL
-# and generate a PIN using a very simple hashing algorithm.
+# argument. If this is not a number then assume it is a URL and
+# generate a PIN using a very simple hashing algorithm.  If it
+# is a question-mark "?" then randomly generate a new pin code.
 if [[ ${1} =~ ^[0-9]+$ ]]
 then
     pin=${1}
+elif [[ ${1} == "?" ]]
+then
+    printf -v pin "%05d" $[ (  $RANDOM % 100000 ) ]    
 else 
     printf -v pin "%05d" $(( $(echo ${1} | cksum | awk '{print $1}') % 100000 ))
 fi
