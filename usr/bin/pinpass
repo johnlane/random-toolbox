@@ -1,0 +1,179 @@
+#!/bin/bash
+################################################################
+#                                                              #
+# pinpass                                                      # 
+#                                                              #
+# Generate password from a pin code by selecting words from a  #
+# phrase-book and applying transformation rules to them        #
+#                                                              #
+#                                                   JL20130314 #
+#                                                              #
+################################################################
+#                                                              #
+# This is a simple password generator that allows a pin code   #
+# to be used to represent a password which may provide more    #
+# security in circumstances where passwords are written down.  #
+#
+# It uses a "phrase-book" - a data file that defines a set of  #
+# up to ten phrases that are used to generate passwords from a #
+# five-digit pin code. The first line of the phrase file must  #
+# contain a configuration string as described below. The       #
+# following ten lines (maximum) should each contain a ten-word #
+# phrase.                                                      #
+#                                                              #
+# The configuration string is a sequence of characters. The    #
+# first is a digit, between 1 and 5, that determines which     #
+# digit of the five-digit pin is used to select one of the ten #
+# phrases to use. The other digits of the pin code are used to #
+# select four words from the phrase to form a password. The    #
+# remaining characters of the configuration string are read,   #
+# one at a time, and interpreted as commands. A command may    #
+# consume other characters from the configuration string and   #
+# use them to transform the password. Supported commands are   #
+# described below.                                             #
+#                                                              #
+#    word suffix: a digit between 0 and 4 will cause that      #
+#    word in the pasword to have the next character from the   #
+#    configuration string to be appended to it.                #
+#                                                              #
+#    character transform: an alpha character will cause any    #
+#    occurance of that character (either upper- or lower-case) #
+#    in the password to be replaced by the next character from #
+#    the configuration string.                                 #
+#                                                              #
+# The phrase-book is a user-specific confidential data         #
+# file that should be secured to keep its contents secret.     #
+#                                                              #
+# Running pinpass without aruments will display a brief usage  #
+# summary. Assuming a suitably prepared phrase-book called     #
+# ".pinpass" in the user's home directory, pinpass should be   #
+# invoked with a pin code like this:                           #
+#                                                              #
+#    $ pinpass 12345                                           #
+#                                                              #
+# and pin pass will display the related password along with,   #
+# as an aide-memoire, the four words used to generate it.      #
+#                                                              #
+################################################################
+
+# Simple abortion
+function abort {
+    echo "$1. Cannot continue."
+    exit 1
+}
+
+# removes the first character of $1 and puts it in $2
+# return value 0 for success
+function pop {
+    eval $2=${!1:0:1}
+    eval $1=${!1:1}
+    [[ -n ${!2} ]]
+}
+
+# print help if no arguments
+if [[ $# -eq 0 ]]; then
+    echo "usage: $0 <pin> [phrase-file]"
+    abort "You must specify at least a PIN number"
+fi
+
+# PIN should be a five digit number given in argument #1
+pin=${1}
+
+# Ensure PIN is a five-digit number
+[[ ${#pin} != 5 ]] && abort "PIN must be five digits"
+
+# Phrase file may contain up to ten phrases which will be used to generate passwords
+# Phrases must contain excatly ten words separated by spaces
+PHRASE_FILE="${2:-${HOME}/.pinpass}"
+
+# Make sure phrase file exists
+[[ -f ${PHRASE_FILE} ]] || abort "Phrase file '${PHRASE_FILE}' does not exist"
+
+# Read phrases
+OLD_IFS=$IFS
+IFS=$'\n'
+PHRASES=($(<${PHRASE_FILE}))
+IFS=$OLD_IFS
+
+# How many phrases do we have
+num_phrases=$((${#PHRASES[@]}-1))
+
+# Phrases element 0 is a config string; the phrases start at element 1
+config=${PHRASES[0]}
+
+# One digit of the PIN is used to select the phrase
+# specified by first config character: must be number between 1 and 5
+pop config PHRASE_SELECT_DIGIT
+[[ ${PHRASE_SELECT_DIGIT} -gt 5 ]] && abort "Phrase select digit must be between 1 and 5"
+
+# Position of the phrase select digit as array index
+phrase_index=$((${PHRASE_SELECT_DIGIT}-1))
+
+# Which phrase? (add 1 so 0..9 maps to phrase 1..10)
+phrase_number=$((${pin:$phrase_index:1}+1))
+
+# Ensure the phrase exists
+[[ ${phrase_number} -gt ${num_phrases} ]] && abort "Phrase ${phrase_number} out of range (max ${num_phrases})"
+
+# Select the phrase to work with
+phrase=${PHRASES[${phrase_number}]}
+
+# Ensure the phrase has enough words
+[[ $(echo $phrase | wc -w) != 10 ]] && abort "Phrase ${phrase_number} does not contain ten words"
+
+# Use the PIN as word indices (except the phrase select digit)
+word_indices=${pin:0:${phrase_index}}${pin:${PHRASE_SELECT_DIGIT}}
+
+# Build password using words from the phrase indexed by the PIN
+words=(${phrase})
+for w in 0 1 2 3
+do
+    password+=(${words[${word_indices:$w:1}]})
+done
+
+# display pin and password phrase (password to follow)
+echo -n "$pin : ${password[@]} : "
+
+#
+# Following rules apply to each word of password individually
+#
+for w in "${!password[@]}"
+do
+        # Rule 1: start with word in lower case
+        password[$w]=${password[$w],,}
+
+        # Rule 2: capitalise every second word
+	[[ $(expr $w % 2)  != 0 ]] && password[$w]=${password[$w]^}
+
+done
+
+#
+# Remaining rules are driven from config string
+#
+# read pairs of characters from config
+while pop config command
+do
+  case $command in
+    [0-9]) # Rule 3
+        # command indexes a word; append second character after that word
+        pop config suffix
+        password[$command]="${password[$command]}${suffix}"
+        ;;
+    [a-z]) # Rule 4
+        # command is a letter: change all occurrences for the second character
+        pop config replacement
+        password=(${password[@]//[${command^}${command,}]/${replacement}})
+        ;;
+    *)
+        abort "unknown command $command"
+  esac
+done
+
+# Convert to string
+password=${password[@]}
+password=${password// /}
+
+#
+# Display generated password
+#
+echo "${password}"
