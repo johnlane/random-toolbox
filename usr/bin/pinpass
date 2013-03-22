@@ -210,3 +210,8 @@ then
     result=$(echo ${password} | cracklib-check | awk -F ':' '{print $2}' | sed 's/^ *//g')
     [[ ${result} == OK ]] || echo "Warning: ${result}"
 fi
+
+#
+# Some stats
+#
+echo "Password is ${#password} characters long."
