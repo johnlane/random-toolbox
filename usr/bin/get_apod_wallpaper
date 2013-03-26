@@ -37,7 +37,7 @@ local_image_dir=/usr/share/wallpaper/apod/${period}
 mkdir -p "${local_image_dir}"
 
 # Look for an image URL on the site web page
-image_path=$(curl -s "${site_url}/${page}" | grep "<a href=\"image/${period}/[^ \">]*.jpg\">" | awk -F '"' '{print $2}')
+image_path=$(curl -s "${site_url}/${page}" | grep "<a href=\"image/${period}/[^ \">]*.jpg\">" | awk -F '"' '{print $2}' | head -1)
 
 # is there an image on the site today? (sometimes a video is there instead)
 if [[ -n ${image_path} ]]; then
