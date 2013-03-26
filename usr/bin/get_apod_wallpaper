@@ -18,10 +18,11 @@ site_url=${uk_site_url}
 # Default to today's image
 # or specified day in $1, format yymmdd (e.g. 121124)
 # Images are organised by year+month (e.g. 1301 is January 2013)
-if [[ -n $1 ]]; then
+if [[ $n =~ [0-9]{6} ]]; then
 
     page="ap${1}.html"
     period=${1:0:4}
+    shift
 
 else
 
@@ -33,7 +34,7 @@ fi
 # directory where downloaded images are stored
 # write access to this directory is required
 #local_image_dir=$(dirname "$(realpath "$0")")/${period}
-local_image_dir=/usr/share/wallpaper/apod/${period}
+local_image_dir=${1:-/usr/share/wallpaper/apod}/${period}
 mkdir -p "${local_image_dir}"
 
 # Look for an image URL on the site web page
