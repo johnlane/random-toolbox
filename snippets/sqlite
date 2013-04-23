@@ -1,0 +1,9 @@
+#
+# This file contins snippets for sqlite
+#
+
+# Exit after executing commands from a file
+echo .exit | sqlite3 -init mycommands.sql sqlite.db
+
+# List all tables
+SELECT name FROM sqlite_master WHERE type='table';
