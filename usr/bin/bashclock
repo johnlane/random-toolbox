@@ -1,0 +1,10 @@
+#!/bin/bash
+# Puts a clock in the shell
+# https://bbs.archlinux.org/viewtopic.php?pid=1280637#p1280637
+
+while sleep 1
+do tput sc
+   tput cup 0 $(($(tput cols)-29))
+   date
+   tput rc
+done 

@@ -5,5 +5,13 @@
 # Exit after executing commands from a file
 echo .exit | sqlite3 -init mycommands.sql sqlite.db
 
+# List databases
+.databases
+
 # List all tables
 SELECT name FROM sqlite_master WHERE type='table';
+or
+.tables
+
+# List columns
+pragma table_info(table_name);

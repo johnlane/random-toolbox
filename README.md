@@ -20,6 +20,10 @@ with ADSL router configuration.
 get_apod_wallpaper downloads wallpaper from NASA's [Astronomy Picture
 of the Day](http://apod.nasa.gov/apod/astropix.htm)
 
+snippets - the files in this directory contain useful command snippets
+for shells, databases and other applications.
+
+
 LICENSE
 -------
 

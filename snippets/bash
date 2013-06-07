@@ -1,0 +1,18 @@
+#
+# This file contins snippets for bash
+#
+
+# Interactive input test
+[[ -t 0 ]] && echo interactive || echo stdin is a pipe or file
+
+# Interactive output test
+[[ -t 1 ]] && echo output to screen || echo output to file
+
+# ROT13 cipher (https://en.wikipedia.org/wiki/ROT13)
+cat "$@" | tr 'a-zA-Z' 'n-za-mN-ZA-M'
+
+# Be nice, or not (https://bbs.archlinux.org/viewtopic.php?pid=1284016#p1284016)
+benice="renice -n 19 -p $$ && ionice -c3 -p $$ && ionice -p $$"
+berude="sudo renice -n -19 -p $$ && sudo ionice -c1 -p $$ && ionice -p $$"
+
+

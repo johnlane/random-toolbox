@@ -1,0 +1,9 @@
+#
+# This file contins snippets for git
+#
+
+# Visualise a repository
+git log --graph --oneline --date-order --decorate --color --all
+
+# Terse commit log
+git log --pretty=oneline --abbrev-commit

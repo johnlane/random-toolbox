@@ -1,0 +1,27 @@
+# Pacman History commands
+# https://bbs.archlinux.org/viewtopic.php?pid=1281605#p1281605
+function pacman(){
+	LOGFILE="/var/log/pacman.log"
+	case "$1" in
+		-H)	#Show entire history
+			cat $LOGFILE
+		    ;;
+		-Hi) #Show installed history
+			grep 'installed' $LOGFILE | grep -v 'ALPM-SCRIPTLET'
+		    ;;
+		-Hr) #Show removed packages
+			grep 'removed ' $LOGFILE | grep -v 'ALPM-SCRIPTLET'
+		    ;;
+		-Hu) #Show upgraded packages
+			grep 'upgraded ' $LOGFILE | grep -v 'ALPM-SCRIPTLET'
+		    ;;
+		-Hs) #Search history
+			grep $2 $LOGFILE
+		    ;;
+		-Hm) #See install messages, preceded by the package that printed them
+			grep $LOGFILE 'ALPM-SCRIPTLET' -B 1
+			;;
+		*) #Pass everything else to pacman as usual
+			/usr/bin/pacman ${1+"$@"}
+		esac
+}

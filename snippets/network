@@ -1,0 +1,10 @@
+#
+# This file contins snippets for network management
+#
+
+# Manually create network setup
+# http://www.wikihow.com/Assign-an-IP-Address-on-a-Linux-Computer
+ip addr add 10.0.1.2/8 dev eth0
+ip route add default via 10.0.0.138
+echo "nameserver 10.0.0.138" > /etc/resolv.conf
+ip link set eth0 up
