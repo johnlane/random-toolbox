@@ -15,3 +15,6 @@ or
 
 # List columns
 pragma table_info(table_name);
+
+# Dump database to SQL
+sqlite3 myfile.db .dump > mydumpfile.sql

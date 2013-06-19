@@ -1,0 +1,63 @@
+#!/usr/bin/env python2
+#
+# get_video_stream
+#
+# Gets a LIVE video stream from a URL, presenting it formatted for use as the input
+# argument to ffmpeg.
+#
+# Supported sites: http://www.ustream.tv
+#
+# Use like this:
+#
+# ffmpeg -i "$(./get_video_stream http://www.ustream.tv/nasahdtv)" -c copy -bsf h264_mp4toannexb -y -f mpegts pipe: | vlc -
+
+import os
+import sys
+import urllib2
+import re
+
+def getVideoData(url):
+    # Get the HTML contents
+    req = urllib2.Request(url)
+    response = urllib2.urlopen(req)
+    html = response.read()
+
+    channelId = None
+    m = re.search("ustream:channel_id.*\"(\d+)\"", html)
+
+    if (m):
+        channelId = m.group(1)
+
+    amfContent = None
+    if (channelId):
+        amfUrl = ("http://cdngw.ustream.tv/Viewer/getStream/1/"
+        + channelId + ".amf")
+        response = urllib2.urlopen(amfUrl)
+        amfContent = response.read()
+
+        rtmpUrl = re.search("(rtmp\:\/\/[^\x00]+)", amfContent).group(1)
+        streamName = re.search("streamName(?:\W+)([^\x00]+)", amfContent).group(1)
+ 
+    return (rtmpUrl, streamName)
+ 
+def getFfmpegArgument(rtmpUrl, streamName):
+    return (rtmpUrl + streamName + " swfUrl=http://www.ustream.tv/flash/viewer.swf live=1")
+ 
+def main(argv=None):
+    # Process arguments
+    if argv is None:
+        argv = sys.argv[1:]
+ 
+    scriptname = os.path.basename(__file__)
+    usage = ("Usage: %s <ustream channel url>\n"
+            "e.g. \"%s 'http://www.ustream.tv/nasahdtv'\"") % (scriptname, scriptname)
+ 
+    if (len(argv) < 1):
+        print usage
+        return
+ 
+    # Get RTMP information and print it
+    print getFfmpegArgument(*getVideoData(argv[0]))
+ 
+if __name__ == "__main__":
+    main()

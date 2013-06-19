@@ -20,6 +20,9 @@ with ADSL router configuration.
 get_apod_wallpaper downloads wallpaper from NASA's [Astronomy Picture
 of the Day](http://apod.nasa.gov/apod/astropix.htm)
 
+get_video_stream returns a video stream URL suitable for use by ffmpeg's
+imput parameter. It supports http://ustream.tv.
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
