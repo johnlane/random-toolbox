@@ -1,0 +1,156 @@
+#!/bin/bash
+#
+# Basic firewall script
+#
+# JL 20130607
+#
+
+reset(){
+    iptables -F
+    iptables -L LOGGING &> /dev/null && iptables -X LOGGING
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+}
+
+disable_firewall(){
+    echo -n "Disabling firewall..."
+    reset
+    echo "done!"
+}
+
+enable_firewall(){
+
+    echo -n "Enabling firewall..."
+    
+    # Explicitly disable ECN
+    [[ -e /proc/sys/net/ipv4/tcp_ecn ]] && echo 0 > /proc/sys/net/ipv4/tcp_ecn
+    
+    # Disable spoofing
+    for x in ${INTERFACES}
+    do
+        echo 1 > /proc/sys/net/ipv4/conf/${x}/rp_filter
+    done
+    
+    # start clean: delete any existing rules
+    reset
+    
+    # default chain policy: drop everything
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT DROP
+
+    # log everything (for debugging)
+    # iptables -A INPUT -j LOG --log-prefix "[iptables] input:" --log-level 7
+    # iptables -A OUTPUT -j LOG --log-prefix "[iptables] output:" --log-level 7
+
+    # multicast packets
+    # http://www.karakas-online.de/forum/viewtopic.php?t=11302
+    iptables -A INPUT -j DROP -d 224.0.0.0/24 
+    
+    #
+    # TCP/UDP Services
+    # (either by name defined in /etc/services or by port number)
+    #
+    # msnp (1863) : MSN Messenger
+    # mmcc (5050): Yahoo! Messenger
+    # 6667 : IRC
+    # 8443 : Used by BT OpenZone landing page (e.g. Starbucks)
+    # 50500 : Mediatomb web server
+    #
+    tcp_incoming="ssh"
+    tcp_outgoing="ftp ssh smtp http https imap rsync msnp mmcc 6667 pcsync-https 50500"
+    udp_drop="netbios-ns netbios-dgm"
+    udp_incoming="domain ntp"
+    udp_outgoing="domain ntp"
+
+    # ICMP: to see list of icmp types "iptables -p icmp -h"
+    # or http://www.iana.org/assignments/icmp-parameters/icmp-parameters.xml
+    # to respond to pings, need incoming echo-request and outgoing echo-reply
+    # to initiate pings, need incoming echo-request and outgoing echo-reply
+    # See also http://serverfault.com/a/340286/116005
+    #          http://eugene.oregontechsupport.com/articles/icmp.txt
+    icmp_incoming="echo-request echo-reply host-unreachable port-unreachable fragmentation-needed ttl-exceeded ip-header-bad"
+    icmp_outgoing="echo-request echo-reply port-unreachable"
+    
+    for p in $tcp_incoming
+    do
+        iptables -A INPUT  -p tcp --dport $p -m state --state NEW,ESTABLISHED -j ACCEPT
+        iptables -A OUTPUT -p tcp --sport $p -m state --state ESTABLISHED     -j ACCEPT
+    done
+    
+    for p in $tcp_outgoing
+    do
+        iptables -A OUTPUT -p tcp --dport $p -m state --state NEW,ESTABLISHED -j ACCEPT
+        iptables -A OUTPUT -p tcp --dport $p -m state --state RELATED -j ACCEPT
+        iptables -A INPUT  -p tcp --sport $p -m state --state ESTABLISHED     -j ACCEPT
+    done
+    
+    for p in $udp_drop
+    do
+        iptables -A OUTPUT -p udp --dport $p -j DROP
+        iptables -A INPUT  -p udp --sport $p -j DROP
+    done
+
+    for p in $udp_incoming
+    do
+        iptables -A OUTPUT -p udp --dport $p -j ACCEPT
+        iptables -A INPUT  -p udp --sport $p -j ACCEPT
+    done
+
+    for p in $udp_outgoing
+    do
+        iptables -A OUTPUT -p udp --sport $p -j ACCEPT
+        iptables -A INPUT  -p udp --dport $p -j ACCEPT
+    done
+
+    for p in $icmp_incoming
+    do
+        iptables -A INPUT -p icmp --icmp-type $p -j ACCEPT
+    done
+    
+    for p in $icmp_outgoing
+    do
+        iptables -A OUTPUT  -p icmp --icmp-type $p -j ACCEPT
+    done
+
+    # special handling for FTP (also requires 'ftp' in 'tcp_outgoing', above)
+    # http://www.cyberciti.biz/faq/iptables-passive-ftp-is-not-working
+    modprobe ip_conntrack
+    modprobe ip_conntrack_ftp
+    # Active FTP
+    iptables -A INPUT  -p tcp --sport ftp-data -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport ftp-data -m state --state ESTABLISHED         -j ACCEPT
+    # Passive FTP
+    iptables -A INPUT  -p tcp --sport 1024: --dport 1024:  -m state --state ESTABLISHED -j ACCEPT
+    iptables -A OUTPUT -p tcp --sport 1024: --dport 1024:  -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+    # stealth (these need to be the last rules in the chain)
+    iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset
+    iptables -A INPUT -p udp -j REJECT --reject-with icmp-port-unreachable
+
+    # Log, then drop anything else
+    iptables -N LOGGING
+    iptables -A INPUT  -j LOGGING
+    iptables -A OUTPUT -j LOGGING
+    iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "[iptables] dropped:" --log-level 7
+    iptables -A LOGGING -j DROP
+    
+    echo "done!"
+}
+
+case $1 in
+
+    on)
+        enable_firewall
+        ;;
+    off)
+        disable_firewall
+	;;
+    reset)
+        iptables -Z # resets the counters to zero
+	;;
+    list)
+        iptables -vL
+	;;
+ esac

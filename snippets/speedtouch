@@ -1,0 +1,29 @@
+#
+# This file contins snippets for the speedtouch router CLI
+#
+
+# Show the current log
+systemlog show
+
+# Network time (sntp = simple network time protocol)
+configured for ntp.plus.net (212.159.13.49
+
+# List all CLI commands
+mlp interaction list type=cli verbose=all
+
+# Show the status of the WAN connection
+atm iflist
+xdsl info
+
+# Bring the link down (untested)
+atm ifdetach intf=atm_Internet
+
+# Bring the link up (untested)
+atm ifattach intf=atm_Internet
+
+#however the above may require other interfaces to be detached and
+#  2 reattached as well. It might be quicker to try:
+xdsl config adslmultimode=adsl2plus
+
+
+

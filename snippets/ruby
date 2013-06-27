@@ -1,0 +1,7 @@
+#
+# This file contins snippets for ruby
+#
+
+# Open A File, Write To It, And Close It In One Line
+# http://www.dzone.com/snippets/ruby-open-file-write-it-and
+File.open(local_filename, 'w') {|f| f.write(doc) }

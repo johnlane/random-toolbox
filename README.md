@@ -26,7 +26,6 @@ imput parameter. It supports http://ustream.tv.
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
-
 LICENSE
 -------
 
