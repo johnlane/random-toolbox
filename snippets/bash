@@ -15,4 +15,14 @@ cat "$@" | tr 'a-zA-Z' 'n-za-mN-ZA-M'
 benice="renice -n 19 -p $$ && ionice -c3 -p $$ && ionice -p $$"
 berude="sudo renice -n -19 -p $$ && sudo ionice -c1 -p $$ && ionice -p $$"
 
+# For-Loop file names with spaces
+# http://www.cyberciti.biz/tips/handling-filenames-with-spaces-in-bash.html
+#!/bin/bash
+SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+for f in *
+do
+  echo "$f"
+done
+IFS=$SAVEIFS
 
