@@ -15,4 +15,5 @@ cat "$@" | tr 'a-zA-Z' 'n-za-mN-ZA-M'
 benice="renice -n 19 -p $$ && ionice -c3 -p $$ && ionice -p $$"
 berude="sudo renice -n -19 -p $$ && sudo ionice -c1 -p $$ && ionice -p $$"
 
-
+# Restart script as root
+[[ $EUID == 0 ]] || { sudo $0 "$@"; exit; }

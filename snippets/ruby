@@ -5,3 +5,6 @@
 # Open A File, Write To It, And Close It In One Line
 # http://www.dzone.com/snippets/ruby-open-file-write-it-and
 File.open(local_filename, 'w') {|f| f.write(doc) }
+
+# Restart as root if not root
+exec('sudo', $0, *ARGV) unless Process.euid == 0
