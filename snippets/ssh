@@ -1,0 +1,12 @@
+#
+# This file contins snippets for ssh
+#
+
+# Start agent
+eval $(ssh-agent)
+
+# Add key to agent
+ssh-add ~/.ssh/johnlane_rsa
+
+# Specify default key in ssh config ~/.ssh/config
+IdentityFile ~/.ssh/johnlane_rsa
