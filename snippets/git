@@ -1,6 +1,8 @@
 #
 # This file contins snippets for git
 #
+#
+# For a good explanation of git concepts see http://gitolite.com/gcs
 
 # Visualise a repository
 git log --graph --oneline --date-order --decorate --color --all
