@@ -1,0 +1,11 @@
+
+The Pro Git book
+http://git-scm.com/book
+
+See chapter 9 for a discussion of Git internals: an interesting look at how git works
+internally, with some low-level examples and ruby code.
+http://git-scm.com/book/en/Git-Internals-Git-Objects
+
+Git from the bottom up:
+http://ftp.newartisans.com/pub/git.from.bottom.up.pdf
+
