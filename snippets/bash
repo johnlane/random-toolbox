@@ -28,3 +28,7 @@ do
   echo "$f"
 done
 IFS=$SAVEIFS
+
+# Copy directory including hidden (.dotfiles) to existing directory
+# http://superuser.com/a/367303/101178
+cp -a /source/path/. /existing/dest/path

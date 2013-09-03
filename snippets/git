@@ -9,3 +9,27 @@ git log --graph --oneline --date-order --decorate --color --all
 
 # Terse commit log
 git log --pretty=oneline --abbrev-commit
+
+# Stage all changes, including deletes
+git add -u
+
+# Stage all changes, including deletes under a certain path, for example
+git add -u my/path
+
+# Stage only deleted files
+# http://stackoverflow.com/a/1402800/712506
+git ls-files --deleted -z | xargs -0 git rm
+
+# Delete/Rename remote branch
+# http://stackoverflow.com/a/4754132/712506
+git branch new-branch-name origin/old-branch-name
+git push origin new-branch-name
+git push origin :old-branch-name
+
+# Delete remote brancg
+git push origin :branch-name
+# or, if a tag exists with the same name
+git push origin :refs/heads/branch-name
+
+# Delete remote tag
+git push origin :refs/tags/tag-name
