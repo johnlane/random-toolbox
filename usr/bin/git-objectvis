@@ -1,0 +1,62 @@
+#!/usr/bin/python2
+#http://evadeflow.com/2011/01/visualizing-git-object-graphs/
+
+from sys import argv, exit
+from os.path import basename
+from dulwich import objects
+from dulwich.repo import Repo
+from dulwich.objects import object_class
+from altgraph import Graph, Dot
+ 
+def walk_obj(repo, node, parent=None, data=None):
+    if object_class(node.get_type()) == objects.Commit:
+        walk_obj(repo, repo.get_object(node.tree), node, data='.')
+ 
+        for p in node.parents:
+            walk_obj(repo, repo.get_object(p))
+ 
+    elif object_class(node.get_type()) == objects.Tree:
+        repo.graph.add_node(node.id, data)
+        repo.graph.add_edge(parent.id, node.id)
+        parent = node
+        for entry in node.items():
+            child = repo.get_object(entry.sha)
+            walk_obj(repo, child, parent, entry.path)
+ 
+    elif object_class(node.get_type()) == objects.Blob:
+        repo.graph.add_node(node.id, data)
+        repo.graph.add_edge(parent.id, node.id)
+    else:
+        assert(not "Unknown object type!")
+ 
+if __name__ == '__main__':
+    if len(argv) < 2:
+        print "Usage: %s <path_to_repo>" % basename(argv[0])
+        exit(1)
+ 
+    repo = Repo(argv[1])
+    repo.graph = Graph.Graph()
+    head = repo.get_object(repo.head())
+ 
+    walk_obj(repo, head)
+ 
+    dot = Dot.Dot(repo.graph)
+    dot.style(size='10,10')
+ 
+    for node_id in dot.nodes.keys():
+        node = repo.get_object(node_id)
+        node_class = object_class(node.get_type())
+        if node_class == objects.Commit:
+            dot.node_style(node_id, shape='box',
+                           label="Commit\\n" + node_id[:7], color='yellow')
+        elif node_class == objects.Tree:
+            dot.node_style(node_id, shape='ellipse', color='blue',
+                           label="%s/\\n%s" % (repo.graph.node_data(node_id),
+                                                       node_id[:7]))
+        else:
+            dot.node_style(node_id,
+                           label="%s\\n%s" % (repo.graph.node_data(node_id),
+                                              node_id[:7]))
+    dot.display()
+    #dot.save_img(basename(repo.path), file_type="png")</path_to_repo>
+    dot.save_img(basename(repo.path), file_type="png")

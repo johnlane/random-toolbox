@@ -23,6 +23,9 @@ of the Day](http://apod.nasa.gov/apod/astropix.htm)
 get_video_stream returns a video stream URL suitable for use by ffmpeg's
 imput parameter. It supports http://ustream.tv.
 
+git-objectvis is a small tool to graphically visualise a git repository's
+object store (http://evadeflow.com/2011/01/visualizing-git-object-graphs)
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
