@@ -1,0 +1,24 @@
+# Regular Expressions
+
+# Reference
+http://www.regular-expressions.info/
+
+# Web-based testers
+  * bash: `http://regexraptor.net/`
+  * ruby: `http://rubular.com/`
+
+
+#!/bin/bash
+# This script is used on the
+# back-end to do the "Match"
+
+regex="$1"
+var="$2"
+
+if [[ "$var" =~ $regex ]]
+then
+	echo "matches"
+else
+	echo "doesn't match!"
+fi
+
