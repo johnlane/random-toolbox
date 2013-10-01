@@ -1,4 +1,5 @@
-#!/usr/bin/env bash ##########################################
+#!/usr/bin/env bash
+##############################################################
 #
 # Backup to remote rsync service
 #
@@ -11,14 +12,8 @@
 # backup will be performed to the remote rsync service at
 # 'zeus::joe'.
 #
-# The backup is launched in a detached screen session so
-# that it can be reattached with 'screen -r'. If such a
-# session exists then subsequent attempts to start the
-# backup will fail (to avoid running multiple jobs).
-#
-# The output from the backup command (rsync -av) is emailed
-# to the user (or to the address contained in the MAILTO
-# environment variable).
+# If an identical backup is already running then nothing is
+# done (this avoids running multiple jobs).
 #
 # The normal use of this script would be via a cron job. An
 # example crontab is shown below:
@@ -29,6 +24,9 @@
 # tested against Vixie Cron
 #
 ############################################### JL 20130927 ##
+
+# Command Line
+COMMAND_LINE="$0 $*"
 
 # Backup host
 BACKUP_HOST=$1
@@ -43,47 +41,35 @@ BACKUP_DIRS="$*"
     exit 1
 }
 
-# Where to send output
-LOG_EMAIL=${MAILTO:-$USER}
-
 # Tools
 PING=/sbin/ping
-SCREEN=/usr/bin/screen
 BASH=/bin/bash
 RSYNC=/usr/bin/rsync
 
-# Is the backup host up
-${PING} -c1 ${BACKUP_HOST} &> /dev/null
-if [[ $? == 0 ]]
+# Is there a job already running
+JOBS=$(sh -c "ps axo pid,command | grep \"${COMMAND_LINE}\" | grep -v grep | grep -v $$")
+if [[ -n "${JOBS}" ]]
 then
-    echo "Backup host ${BACKUP_HOST} is up"
-
-    # RSYNC service to which we will back up
-    BACKUP_SERVICE="${BACKUP_HOST}::${USER}"
-
-    # Is there a backup already running
-    JOBS=$(${SCREEN} -ls | grep ${BACKUP_SERVICE})
-
-    if [[ -n "${JOBS}" ]]
-    then
-        echo "A backup is already in progress at $(date)"
-        echo -e ${JOBS}
-    else
-        LOG_TITLE="${BACKUP_SERVICE} $(date)"
-        SCREEN_COMMAND="${RSYNC} -av --delete ${BACKUP_DIRS} ${BACKUP_SERVICE} | tee >(mail -s '${LOG_TITLE}' ${LOG_EMAIL})"
-       ${SCREEN} -L -dmS ${BACKUP_SERVICE} bash -c "${SCREEN_COMMAND}"
-
-        if [[ $? == 0 ]]
-        then
-            JOBS=$(${SCREEN} -ls | grep ${BACKUP_SERVICE})
-            echo "Launched backup to ${BACKUP_SERVICE} at $(date)"
-            echo -e ${JOBS}
-            echo "Backing up: ${BACKUP_DIRS}"
-            echo "Will send results to ${LOG_EMAIL} ref '${LOG_TITLE}'"
-        else
-            echo "Failed to launch backup to ${BACKUP_SERVICE}"
-        fi
-    fi
+    echo "A job is already in progress at $(date)"
+    echo -e ${JOBS}
 else
-    echo "Backup host ${BACKUP_HOST} was not available at $(date)"
+    # Is the backup host up ?
+    ${PING} -c1 ${BACKUP_HOST} &> /dev/null
+    if [[ $? != 0 ]]
+    then
+        echo "Backup host ${BACKUP_HOST} was not available at $(date)"
+    else
+        echo "Backup host ${BACKUP_HOST} is up"
+
+        # RSYNC service to which we will back up
+        BACKUP_SERVICE="${BACKUP_HOST}::${USER}"
+
+        echo "Starting backup to ${BACKUP_SERVICE} at $(date)"
+        echo "Backing up: ${BACKUP_DIRS}"
+
+        time ${RSYNC} -av --delete ${BACKUP_DIRS} ${BACKUP_SERVICE}
+
+        echo # blank line
+        echo "Backup completed at $(date)"
+    fi
 fi
