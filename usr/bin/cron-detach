@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+##############################################################
+#
+# Start detached cron job
+#
+# Usage: cron-detach command-line
+#
+# The command-line is launched in a detached screen session
+# that can be reattached with 'screen -r'.
+#
+# The normal use of this script would be via a cron job. An
+# example crontab is shown below:
+#
+#    MAILTO=joe@example.com
+#    */30 * * * * /home/joe/cron-detach myscript arg1 arg2
+#
+# tested against Vixie Cron
+#
+############################################### JL 20130927 ##
+
+# Command Line
+COMMAND_LINE="$*"
+
+# Tools
+SCREEN=/usr/bin/screen
+
+## Is the job already running?
+JOBS=$(${SCREEN} -ls | grep "${COMMAND_LINE}")
+if [[ -n "${JOBS}" ]]
+then
+    echo "A job is already in progress at $(date)"
+    echo -e ${JOBS}
+else
+    echo "starting detached job '${COMMAND_LINE}'"
+    ${SCREEN} -dmS "${COMMAND_LINE}" $@
+    echo "Started ${COMMAND_LINE}"
+    ${SCREEN} -ls | grep "${COMMAND_LINE}"
+fi
