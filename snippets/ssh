@@ -10,3 +10,6 @@ ssh-add ~/.ssh/johnlane_rsa
 
 # Specify default key in ssh config ~/.ssh/config
 IdentityFile ~/.ssh/johnlane_rsa
+
+# Install key on remote host
+ssh-copy-id -i ~/.ssh/johnlane_rsa.pub user@host
