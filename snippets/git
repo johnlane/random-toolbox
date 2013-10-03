@@ -45,3 +45,11 @@ git clean -f -d # also remove directories
 git clean -f -x # also remove ignored files
 git clean -f -X # only remove ignored files
 
+# Find deleted file
+# http://stackoverflow.com/a/16635324/712506
+# see the changes of a file, works even if the file was deleted
+git log -- [file path]
+
+# limit the output of Git log to the last commit, i.e. the commit which delete the file
+# -1 to see only the last commit. use 2 to see the last 2 commits etc
+git log -1 -- [file path]
