@@ -36,3 +36,12 @@ git push origin :refs/tags/tag-name
 
 # Garbage collect all repos
 # http://tim.theenchanter.com/2008/06/garbage-collect-every-git-repository-on.htmlfind . -type d -name .git | while read dir; do pushd "$dir"; git gc --prune; popd; done
+
+# Remove untracked files fro Git working copy
+# http://stackoverflow.com/questions/61212
+# Beware... there's no going back. Use -n or --dry-run to preview the damage you'll do!
+git clean -f
+git clean -f -d # also remove directories
+git clean -f -x # also remove ignored files
+git clean -f -X # only remove ignored files
+
