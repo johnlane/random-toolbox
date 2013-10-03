@@ -8,7 +8,7 @@
 #                                                               #
 #################################################################
 
-# main US site and UK mirror
+# main US site and UK mirror (mirrorlist at ${site_url}/lib/about_apod.html)
 us_site_url="http://apod.nasa.gov/apod"
 uk_site_url="http://www.star.ucl.ac.uk/~apod/apod"
 
