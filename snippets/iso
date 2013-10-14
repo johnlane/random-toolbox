@@ -1,0 +1,6 @@
+#
+# This file contins snippets for working with iso images
+#
+
+# Convert a directory to ISO (usable by MS-DOS)
+mkisofs -V QUAKE_CD -o quake.iso /srv/transfer/QUAKE_CD

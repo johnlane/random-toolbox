@@ -42,3 +42,12 @@ shopt +s nocasematch
 # Set an exit code by executing exit with an argument in a subshell
 $ (exit 42); echo "$?"
 42
+
+# Make a floppy image
+dd bs=512 count=2880 if=/dev/zero of=floppy.img
+mkfs.msdos floppy.img
+mount -o loop floppy.img /mnt
+<-- copy files to /mnt -->
+umount /mnt
+
+
