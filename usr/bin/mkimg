@@ -1,0 +1,63 @@
+#!/bin/bash
+# mkimg : a simple tool to make a floppy
+#                                         JL20131014
+
+# Restart script as root
+[[ $EUID == 0 ]] || { sudo $0 "$@"; exit; }
+
+# Housekeeping
+function cleanup {
+  if [[ -d "${mount}" ]]
+  then
+    grep "${mount}" /proc/mounts &>/dev/null && umount ${mount}
+    rmdir ${mount}
+  fi
+}
+
+# Simple abortion
+function abort {
+  echo "$1. Cannot continue."
+  cleanup
+  exit 1
+}
+
+# Sensible defaults
+source=${1:-floppy}
+floppy=${2:-${1%%.*}.img}
+
+# don't clobber existing image
+[[ -e ${floppy} ]] && abort "${floppy} already exists"
+
+# source a directory or a file
+if [[ -d ${source} ]]
+then
+  srctype="directory"
+elif [[ -f ${source} ]]
+then
+  file ${source} | grep ZIP &>/dev/null && srctype="ZIP"
+  file ${source} | grep "tar" &>/dev/null && srctype="TAR"
+fi
+
+# only proceed with supported source
+[[ -n ${srctype} ]] || abort "Don't know how to make img from ${source}"
+
+# state what will be done
+echo "Making floppy-disk image '${floppy}' from ${srctype} '${source}'"
+
+# Make an image file
+dd bs=512 count=2880 if=/dev/zero of=${floppy} &>/dev/null
+mkfs.msdos ${floppy} &>/dev/null
+
+# mount image
+mount=$(mktemp -d)
+mount -o loop ${floppy} ${mount}
+
+# copy
+case ${srctype} in
+  directory) cp -a ${source} ${mount}       ;;
+  TAR) tar -C ${mount} xf ${source}         ;;
+  ZIP) unzip -q -d ${mount} ${source}       ;;
+  *) abort "Unexpected file type ${source}" ;;
+esac
+
+cleanup
