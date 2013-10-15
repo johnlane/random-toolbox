@@ -2,6 +2,142 @@
 # mkimg : a simple tool to make a floppy
 #                                         JL20131014
 
+function help {
+myname=$(basename $0)
+cat <<-EOF
+
+
+	${myname}: Make floppy disk image.
+
+	Makes a floppy disk image file that can either be written onto a
+	real floppy-disk or used as a disk image with a virtual machine.
+
+	(images created with ${myname} have been used with VirtualBox)
+
+	Synopsis
+
+	    ${myname} [OPTIONS] [SOURCE] [IMAGE]
+
+	Description
+
+	    Uses SOURCE material to create a floppy-disk IMAGE. The following
+	    OPTIONS are recognised:
+
+	      -h              Display this help screen
+	      -L              Display the license and copyright notices
+	      -v              Verbose output
+	      -vv             More verbose output
+	      -vvv            Even more verbose output
+	      -q              Quiet: no verbose output
+	      -r              Replace IMAGE if it already exists
+	      -s size         size of the image, given in KiBiBytes (1KiB = 1024bytes)
+	      -S size         like -s but don't try to create a sparse image (see below)
+	      -i source       specify the input source, an alternative to SOURCE
+	      -o image        specify the output image, an alternative to IMAGE
+	      -l name         disk label (the image has no label by default)
+
+	      The SOURCE material can be supplied as:
+
+	        * a regular file
+	        * a directory
+	        * a tar archive (compressed or otherwise)
+	        * a ZIP archive
+
+	      Unless -S is given, ${myname} will attempt to create the image as a 
+	      'sparse' file if the filesystem allows it (most do). A sparse file is one
+	      that saves space by not storing empty blocks. This subtle nuance is trans-
+	      parent to the end-user but helps to efficiently use storage.
+
+	      If neither of the -s or -S options are given then a ${DISK_SIZE_KB}K image will
+	      be created. Typical size values for MS-DOS floppy disk images are listed
+	      below:
+
+	        *  360         5.25-inch low-density 360K disk
+	        *  720         3.5-inch low-density 720K disk
+	        * 1200         5.25-inch high-density 1.2MB disk
+	        * 1440         3.5-inch high-density 1440K disk
+
+	      Other size values may be used but there may be practical limitations to
+	      the compatibility of image sizes not listed above.
+
+	      If the -i option is not given then the input SOURCE must be supplied as
+	      the first non-option argument. If the -o option is not given then the out-
+	      put IMAGE name must be supplied as the last non-option argument.
+
+	      Non-option arguments other than the first and last ones are ignored.
+
+	      If the SOURCE is not supplied then ${myname} will exit without doing
+	      anything.
+
+	      If the IMAGE is not supplied ${myname} will generate it automatically from
+	      the SOURCE name after excluding any path or file extension (everything before the
+	      first dot '.' character) and  it will append a '.img' extension.
+
+	Examples
+
+	    Create a 1.44MB (e.g 3.5-inch floppy-disk) image containing a single file
+	    called 'file.txt'. The image will be called 'file.img'.
+
+	    $ ${myname} file.txt
+
+	    Create a 1.2MB (e.g. a 5.25-inch floppy-disk) image containing a single file
+	    called 'file.txt'. The image will be called 'file.img'.
+
+	    $ ${myname} -s1200 file.txt
+
+	    Create a 1.44MB (e.g. a 3.5-inch floppy-disk) image from a ZIP file called
+	    and 'file.txt' call the image 'floppy.img'
+
+	    $ ${myname} myfile.zip floppy.img
+	    or
+	    $ ${myname} -o floppy.img myfile.zip
+	    or
+	    $ ${myname} -i myfile.zip floppy.img
+	    or
+	    $ ${myname} -i myfile.zip -o floppy.img
+
+	Support
+
+	    Please raise any issues at http://github.com/johnlane/random-toolbox
+
+	License
+
+	    MIT License. Please do '${myname} -L' to display the full license text.
+
+	EOF
+exit
+}
+
+function license {
+cat <<-EOF
+	Copyright (c) 2013 John Lane
+	
+	MIT License
+	
+	Permission is hereby granted, free of charge, to any person obtaining
+	a copy of this software and associated documentation files (the
+	"Software"), to deal in the Software without restriction, including
+	without limitation the rights to use, copy, modify, merge, publish,
+	distribute, sublicense, and/or sell copies of the Software, and to
+	permit persons to whom the Software is furnished to do so, subject to
+	the following conditions:
+	
+	The above copyright notice and this permission notice shall be
+	included in all copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+	MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+	LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+	OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	
+	http://www.opensource.org/licenses/mit-license.php
+	EOF
+exit
+}
+
 # Restart script as root
 [[ $EUID == 0 ]] || { sudo $0 "$@"; exit; }
 
@@ -9,8 +145,8 @@
 function cleanup {
   if [[ -d "${mount}" ]]
   then
-    grep "${mount}" /proc/mounts &>/dev/null && umount ${mount}
-    rmdir ${mount}
+    grep "${mount}" /proc/mounts &>/dev/null && umount ${v} ${mount}
+    rmdir ${v} ${mount}
   fi
 }
 
@@ -21,9 +157,54 @@ function abort {
   exit 1
 }
 
-# Sensible defaults
-source=${1:-floppy}
-floppy=${2:-${1%%.*}.img}
+# Return true if verbose level above specified value
+function verbose {
+  [[ ${verbose} -gt $1 ]]
+}
+
+# Options defaults
+verbose=0           # Be quiet
+sparse=true         # Make a space-efficient sparse image
+replace=false       # Do not replace image if it already exists
+DISK_SIZE_KB=1440   # Disk size defaults to 1.44MB disk
+
+# Options
+while getopts "hLvqrs:S:i:o:l:" opt
+do
+  case "${opt}" in
+    h) help                                 ;;
+    L) license                              ;;
+    v) let verbose+=1                       ;;
+    q) verbose=0                            ;;
+    r) replace=true                         ;;
+    s) DISK_SIZE_KB=${OPTARG}; sparse=true  ;;
+    S) DISK_SIZE_KB=${OPTARG}; sparse=false ;;
+    i) source=${OPTARG}                     ;;
+    o) floppy=${OPTARG}                     ;;
+    l) label="-n ${OPTARG}"                 ;;
+  esac
+done
+shift $((OPTIND-1)) # Shift off the options and optional --
+
+# Use mass-arguments and sensible defaults unless specified as options
+[[ -z "${source}" ]] && source=${1:-floppy} # first mass-argument
+[[ -z "${floppy}" ]] && floppy=${*: -1}     # last mass-argument, or derive from source
+[[ -z ${floppy} || "${floppy}" == "${source}" ]] && floppy=${source%%.*}.img 
+
+# If we more than verbose level 2 then add verbose controls to many commands
+if verbose 2
+then
+  v='-v'
+else
+  q='-q'
+  devnull='&>/dev/null'
+fi
+
+# Floppy disk block size in bytes
+BLOCK_SIZE=512
+
+# remove any existing image if replacing
+${replace} && rm -f ${floppy}
 
 # don't clobber existing image
 [[ -e ${floppy} ]] && abort "${floppy} already exists"
@@ -34,6 +215,7 @@ then
   srctype="directory"
 elif [[ -f ${source} ]]
 then
+  srctype="file"
   file ${source} | grep ZIP &>/dev/null && srctype="ZIP"
   file ${source} | grep "tar" &>/dev/null && srctype="TAR"
 fi
@@ -41,23 +223,59 @@ fi
 # only proceed with supported source
 [[ -n ${srctype} ]] || abort "Don't know how to make img from ${source}"
 
+let DISK_SIZE=1024*${DISK_SIZE_KB}
+let DISK_BLOCKS=${DISK_SIZE}/${BLOCK_SIZE}
+
 # state what will be done
-echo "Making floppy-disk image '${floppy}' from ${srctype} '${source}'"
+if verbose
+then
+  echo "Making ${DISK_SIZE_KB}K floppy-disk image '${floppy}' from ${srctype} '${source}'"
+  if verbose 1
+  then
+    printf "%8d blocks in image\n" " ${DISK_BLOCKS}"
+    printf "%8d bytes per block\n" "${BLOCK_SIZE}"
+    printf "%8d bytes in image\n" " ${DISK_SIZE}"
+  fi
+fi
 
-# Make an image file
-dd bs=512 count=2880 if=/dev/zero of=${floppy} &>/dev/null
-mkfs.msdos ${floppy} &>/dev/null
+# Make the image file
+if $sparse
+then
+  dd bs=1 seek=${DISK_SIZE} count=0 if=/dev/zero of=${floppy} &>/dev/null
+else
+  dd bs=${BLOCK_SIZE} count=${DISK_BLOCKS} if=/dev/zero of=${floppy} &>/dev/null
+fi
 
-# mount image
+# Make filesystem on the image
+eval mkfs.msdos ${v} ${label} ${floppy} ${devnull}
+
+# mount the image
 mount=$(mktemp -d)
-mount -o loop ${floppy} ${mount}
+mount ${v} -o loop ${floppy} ${mount}
 
 # copy
 case ${srctype} in
-  directory) cp -a ${source} ${mount}       ;;
-  TAR) tar -C ${mount} xf ${source}         ;;
-  ZIP) unzip -q -d ${mount} ${source}       ;;
-  *) abort "Unexpected file type ${source}" ;;
+  directory) (cd ${source} && cp ${v} -r . ${mount}) ;;
+  file)      cp ${v} ${source} ${mount}           ;;
+  TAR)       tar ${v} -C ${mount} xf ${source}       ;;
+  ZIP)       unzip ${q} -d ${mount} ${source}     ;;
+  *) abort "Unexpected file type ${source}"     ;;
 esac
 
+# give file ownership back
+[[ -n ${SUDO_USER} ]] && chown ${v} ${SUDO_USER}: ${floppy}
+
 cleanup
+
+# report on what was done
+if verbose
+then
+  echo "Image '${floppy}' created"
+  if verbose 1
+  then
+    printf "%8d bytes apparent image file size\n" $(du -b  ${floppy} | awk '{print $1}')
+    printf "%8d bytes actual image file size\n" $(du -B1 ${floppy} | awk '{print $1}')
+    printf "%8d bytes actual image size\n" $(stat -c%s ${floppy})
+    ls -l ${floppy}
+  fi
+fi
