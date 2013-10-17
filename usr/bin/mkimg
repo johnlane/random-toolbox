@@ -255,8 +255,8 @@ mount ${v} -o loop ${floppy} ${mount}
 
 # copy
 case ${srctype} in
-  directory) (cd ${source} && cp ${v} -r . ${mount}) ;;
-  file)      cp ${v} ${source} ${mount}           ;;
+  directory) (cd ${source} && cp ${v} -r --preserve=mode,timestamps . ${mount}) ;;
+  file)      cp ${v} --preserve=mode,timestamps ${source} ${mount}           ;;
   TAR)       tar ${v} -C ${mount} xf ${source}       ;;
   ZIP)       unzip ${q} -d ${mount} ${source}     ;;
   *) abort "Unexpected file type ${source}"     ;;
