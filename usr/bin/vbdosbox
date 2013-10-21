@@ -1,0 +1,136 @@
+#!/bin/bash
+#
+# Load a VB machine's hard disks mounted in DOSBOX
+#
+# This is a "quick 'n' dirty' script to start a DosBox and mount the drives
+# that are attached to a VirtualBox VM (which must NOT be running)
+#
+# For a partitioned hard disk, it mounts the FIRST partition
+# It uses vdfuse to enable mounding of a VirtualBox VDI hard disk file
+#
+# Supports a VM-specific configuration file 'dosbox.conf' for DosBox that
+# is a supplement to the user's default configuration
+#
+# JL 20131021
+#
+# MIT License : http://www.opensource.org/licenses/mit-license.php
+# Copyright 2013 John Lane http://github.com/johnlane/random-toolbox
+#
+
+# Virtual machine specified on command-line as name or UUID
+vm="$1"
+
+# We will pass remaining args verbatim to DosBox
+shift
+
+# Don't run if VM doesn't exist
+if [[ ! $(VBoxManage list vms | grep -n "$vm") ]]
+then
+  echo "Virtual Machine '$vm' doesn't exist: cannot not start a DosBox."
+  exit 1
+fi
+
+# Don't run if VM is already running
+if [[ $(VBoxManage list runningvms | grep -n "$vm") ]]
+then
+  echo "Virtual Machine '$vm' is running: will not start a DosBox."
+  exit 1
+fi
+
+# get DOSBOX config file path
+DOSBOX_VER=$(dosbox -version | grep "DOSBox version" | awk -F'[ ,]' '{print $3}')
+eval DOSBOX_CONF="~/.dosbox/dosbox-${DOSBOX_VER}.conf" # eval to expand ~
+
+# location of vdfuse
+VDFUSE="LD_LIBRARY_PATH=/opt/VirtualBox ~/Downloads/vdfuse"
+
+# defaults
+VDFUSE=${VDFUSE:-vdfuse}
+MOUNTPREFIX="/tmp/vbdosbox_$$_"
+
+function escape() {
+  local escape_chars=" ()"
+  local s=$1
+  local i c ec
+  for (( i=0; i<${#escape_chars}; i++ )); do
+    c=${escape_chars:$i:1}
+    ec="\\$c"
+    s=${s//$c/$ec}
+  done
+  eval $2="'$s'"
+}
+
+# vb drive identifiers to look for in VBoxManage showvminfo
+drive_a_id="Floppy (0, 0)"
+drive_c_id="IDE (0, 0)"
+drive_d_id="IDE (1, 0)"
+
+# get info about VMs
+vminfo=$(VBoxManage showvminfo "$vm")
+
+# Get the VM's config directory
+data=$(echo "$vminfo" | grep "^Config file")
+if [[ "${data}" =~ ^Config\ file:\ *(.*) ]]
+then
+  VMDIR=$(dirname "${BASH_REMATCH[1]}")
+  echo "${VMDIR}"
+fi
+
+# If no -conf argument given on command line then look for a VM-specific
+# DOSBox config file in the VM's config directory. But, if there is one
+# then we need to also explicitly specify the default one as well.
+if [[ -f "${VMDIR}/dosbox.conf" && ! "$*" =~ -conf ]]
+then
+  [[ -f "${DOSBOX_CONF}" ]] && DOSBOX_COMMANDS+="-conf '${DOSBOX_CONF}' "
+  DOSBOX_COMMANDS+="-conf '${VMDIR}/dosbox.conf' "
+fi
+
+# identify drives
+for drive in a c d
+do
+  id_var=drive_${drive}_id       #set id_var to name of variable containing drive id
+  id=${!id_var}                  #set id to the drive id
+  escape "${!id_var}" id_escaped #set id_escaped to escaped copy of id for use in regex
+
+  data=$(echo "$vminfo" | grep "^${id}")
+  if [[ "${data}" =~ ${id_escaped}:\ (.*)\ \(UUID:\ ([0-9a-z-]*)\) ]] 
+  then
+    path="${BASH_REMATCH[1]}"
+    uuid="${BASH_REMATCH[2]}"
+    device_type="${data%% *}"
+    device_type="${device_type,,}" # convert to lower case
+    file_type="${path##*.}"
+    echo device type:$device_type
+    echo file type:$file_type
+    echo UUID:$uuid
+    echo path:$path
+
+    case ${file_type} in
+      img) cmd="IMGMOUNT $drive \"$path\" -t ${device_type}" ;;
+      iso) cmd="IMGMOUNT $drive \"$path\" -t iso" ;;
+      vdi)
+        mount_point=$(mktemp -d "${MOUNTPREFIX}XXXXX")
+	eval $VDFUSE -wf "'${path}'" "'${mount_point}'"
+	sudo mount -o loop,uid=$(id -u),gid=$(id -g) "${mount_point}/Partition1" "${mount_point}"
+	cmd="MOUNT $drive ${mount_point}"
+	;;
+    esac
+    echo $mount
+    DOSBOX_COMMANDS+="-c \"$cmd\" "
+  fi
+done
+
+# run dosbox here
+echo $DOSBOX_COMMANDS "$@"
+eval dosbox $DOSBOX_COMMANDS "$@"
+
+# Unmount and clean up
+IFS=$(echo -en "\n\b")        # process below one line at a time
+for mnt in $(echo "$(mount)")
+do
+  if [[ $mnt =~ .*\ on\ (${MOUNTPREFIX}.*)\ type ]]
+  then
+    sudo umount ${BASH_REMATCH[1]}
+  fi
+done
+rmdir ${MOUNTPREFIX}*
