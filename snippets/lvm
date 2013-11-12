@@ -1,0 +1,7 @@
+#
+# This file contins snippets for lvm
+# (LVM is a Logical Volume Manager for the Linux operating system)
+#
+
+# Activate a volume group
+vgchange -a y <name of vg>
