@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# get_tuxradar_podcasts
+#
+# Download Tuxradar podcasts
+# http://tuxradar.com and http://www.linuxformat.com
+#
+# JL 20131112
+
+# Gets episodes not present in current directory
+# Stops series on first episode not found
+
+# maxima
+series_max=5
+episode_max=25
+
+# Filename and URL formatting
+file_format="tuxradar_s%02de%02d.ogg"
+url_root=http://www.tuxradar.com/files/podcast
+
+# The gubbins
+for series in $(eval echo "{1..${series_max}}")
+do
+    for (( episode=1; $?==0 && ${episode}<=${episode_max}; episode++ ))
+    do
+       file=$(printf ${file_format} ${series} ${episode})
+       url="${url_root}/${file}"
+       [[ -e ${file} ]] && continue || wget $url 
+    done
+done

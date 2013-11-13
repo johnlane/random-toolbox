@@ -29,6 +29,9 @@ object store (http://evadeflow.com/2011/01/visualizing-git-object-graphs)
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
+ad-hoc - the scripts in this directory were written for specific ad-hoc
+purposes and are preserved here in case they become useful again.
+
 LICENSE
 -------
 
