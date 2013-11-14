@@ -1,0 +1,314 @@
+#!/usr/bin/env ruby
+
+LICENSE=%{
+Copyright (c) 2013 John Lane
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+http://www.opensource.org/licenses/mit-license.php
+}
+
+DESCRIPTION=%{
+ghostbuster : Extract blog content from Ghost database into files
+
+This is a tool that extracts content from a Ghost (http://www.ghost.org)
+system into files. The primary use-case is to store post data into a
+version control system such as Git (http://www.git-scm.com).
+
+The extracted files may also be used to host a lightweight copy of the
+blog on a static web server. An index page is generated and this can
+be used as a landing page on such a static web server.
+
+Quick Start
+-----------
+
+Those that don't want to read the detail can try this:
+
+$ ghostbuster /path/to/content /path/to/repository
+
+Detail
+------
+
+    ghostbuster [OPTIONS] SOURCE [DESTINATION]
+
+Ghostbuster extracts content from the "content" directory of a Ghost
+directory tree. The SOURCE is the directory location of the Ghost
+installation whose contents should be extracted. The DESTINATION is
+the directory location to where the content should be extracted to.
+
+The following content is extracted :
+
+  1. Posts
+  2. Directories
+
+SOURCE is mandatory. If it does not end in '/content' then this will be
+added automatically, so "/path/to/ghost" and "/path/to/ghost/content"
+are equivalent. 
+
+DESTINATION is optional. If not given, the destination will be the same
+as SOURCE. Only posts will be extracted and they will be written to the
+SOURCE. 
+
+If SOURCE and DESTINATION are different then Ghostbuster will also copy
+the content directories specified by the --copydirs option, which should
+be given as a comma-separated list. If the --copydirs option is not used
+then a default value of "images,themes/active-theme" will be used where
+"active-theme" is the active theme defined by Ghost's settings page.
+
+Posts are written as separate files with names in the following format:
+
+  ID - TITLE.TYPE
+
+where ID is the post ID assigned by Ghost, TITLE is the post's title and
+TYPE is the file type: both html and markdown files will be written.
+
+In addition, an index.html file is written containing links to all posts.
+If the extracted files are placed on a web server, this can serve as a
+landing page. For example, point a local web browser directly at the
+extract destination (file://DESTINATION/index.html)
+
+Ghostbuster will, by default, extract all posts. To only extract posts
+that have been published, use the --published option.
+
+Operational requirements
+------------------------
+
+The sqlite3 and sanitize gems must be installed:
+
+  $ gem install sqlite3 sanitize
+
+Arch Linux package requirements:
+ruby     : runtime
+devtools : may be required to install/build gems
+
+                   (c) John Lane 2013-11-14.
+                Licensed under the MIT License.
+
+                   Part of the Random Toolbox:
+             https://github.com/johnlane/random-toolbox
+
+}
+
+require 'sqlite3' # gem install sqlite3
+require 'yaml'
+require 'optparse'
+require 'fileutils'
+require 'date'
+require 'sanitize'
+
+options = {}
+optparse = OptionParser.new do |opts|
+  opts.banner = DESCRIPTION
+
+  opts.on("--license", "show the MIT License") do |v|
+    puts LICENSE
+    exit 0
+  end
+
+  opts.on("-v", "--verbose", "Enable verbose message output") do |v|
+   $verbose = true
+  end
+
+  opts.on("--copydirs COPYDIRS", "Specify directories to copy (comma-separated)") do |d|
+    options[:copydirs] = d
+  end
+
+  opts.on("-p", "--published", "Only published content") do |v|
+   options[:published] = true
+  end
+
+end
+
+optparse.parse!
+
+# Positional arguments
+if ARGV.empty?
+  puts optparse
+  exit 1
+end
+
+def abort(m)
+  puts("#{m}. Cannot continue.")
+  exit 1
+end
+
+def log(m)
+  puts m if $verbose
+end
+
+def do_or_die(condition,log_message,error_message)
+  condition ? log(log_message) : abort(error_message)
+end
+
+source = ARGV[0].dup
+source << "/content" unless File.basename(source) == 'content'
+destination = ARGV.count >1 ? ARGV[1] : options[:source]
+database = source+"/data/ghost-dev.db"
+
+# Check source is valid
+do_or_die(File.directory?(source),'source is good',"'#{source} is not a directory")
+do_or_die(File.exists?(database),'database found',"Cannot find database file #{database}")
+
+# Check destination is valid
+do_or_die(File.directory?(destination),'destination is good', "'#{destination}' is not a directory")
+
+# initialise database
+do_or_die(db = SQLite3::Database.new(database),'database opened',"Could not initialise database #{database}")
+
+# read settings
+settings = %w[title description logo cover activeTheme]
+query = "select key,value from settings where key in (#{settings.map{|s|"'#{s}'"}.join(',')})"
+settings = {}
+do_or_die(db.execute(query).each{|s| settings.update s[0].to_sym => s[1]},
+          'read settings','unable to read settings')
+
+# Copy directories unless source and destination are the same
+unless source == destination
+  if options[:copydirs].nil?
+    copydirs = [ 'images' ]
+    copydirs << 'themes/'+settings[:activeTheme] unless settings[:activeTheme].nil?
+  else
+     copydirs = options[:copydirs].split(',')
+  end
+  copydirs.each do |d|
+    d.insert(0,source+'/') # prepend source directory
+    abort ("Cannot find directory '#{d}'") unless File.directory? d
+    log("copying '#{d}' to '#{destination}'")
+    FileUtils.cp_r(d,destination,preserve: true)
+  end
+end
+
+# Extract posts into files
+db.results_as_hash = true
+query = 'select p.*, u.name as author_name from posts p inner join users u on p.author_id = u.id'
+query << ' where p.published_at is not null' if options[:published] 
+query << ' order by p.published_at desc'
+
+# Prepare html content parts
+nl = "\n"
+meta = '<meta http-equiv="Content-Type" content="text/html" charset="UTF-8" />' + nl
+meta << '<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />' + nl
+meta << '<link rel="stylesheet" type="text/css" href="' + settings[:activeTheme] + '/assets/css/screen.css"/>' unless settings[:activeTheme].nil?
+meta << '<link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Open+Sans:700,400" />'
+meta << '<meta name="generator" content="GhostBuster" />'
+
+html_index='<html><head>' + nl + meta + nl + '</head>'
+html_index << '<body class="home-template">' << nl
+
+cover_path = /\/content\/(.*)/.match(settings[:cover])[1]
+logo_path = /\/content\/(.*)/.match(settings[:logo])[1]
+
+html_index << '<header id="site-head" style="background-image: url('+cover_path+')">' << nl
+html_index << '<div class="vertical"><div id="site-head-content" class="inner">'
+html_index << '<h1 class="blog-title">' + settings[:title] + '</h1>'
+html_index << '<h2 class="blog-description">' + settings[:description] + '</h2>'
+html_index << '</div></div>' << nl << '</header>' << nl << '<main class="content" role="main">'
+
+html_head='<html><head>' + nl + meta + nl + '</head>' + nl
+html_head << '<body class="post-template"><main class="content" role="main">'
+html_head << '<article class="post"><header class="post-header">'
+html_head << '<a id="blog-logo" href="index.html"><img src="'+logo_path+'" alt="Blog Logo" /></a></header>'
+
+html_foot='</main>'
+html_foot = '<footer class="site-footer"><div class="inner">'
+html_foot << '<section class="copyright">All content copyright <a href="index.html">'
+html_foot << settings[:title] << '</a> &copy; 2013 &bull; All rights reserved.</section>'
+html_foot << '<section class="poweredby">Powered by <a href="https://github.com/johnlane/random-toolbox">GhostBuster</a> by John Lane</section>'
+html_foot << '</div></footer>'
+html_foot << '</body></html>'
+
+db.execute(query) do |post|
+  file_name = "#{post['id']} - #{post['title']}"
+  file_path = "#{destination}/#{file_name}"
+ 
+  # the update timestamp will be set on the files
+  update_time = DateTime.strptime(post['updated_at'].to_s,'%Q').to_time
+  publish_date = post['published_at'].to_s
+  publish_date = publish_date =~ /\d{13}/ ? DateTime.strptime(publish_date,'%Q').strftime("%d %b %Y") : '(draft)'
+  publish_html = '<span class="post-meta"><time>' + publish_date + '</span>'
+
+  # write html
+  log("writing html for post '#{post['title']}'")
+  file_name_extn = "#{file_name}.html"
+  file_path_extn = "#{file_path}.html"
+
+  # get html content
+  content = post['html']
+
+  # get a plain-text excerpt from content for the index page
+  content.gsub!('/content/','') # so local urls work in the html
+  excerpt = Sanitize.clean(post['html'])[0..250]
+
+  # wrte html for the post page
+  html = html_head + nl
+  html << publish_html
+  html << '<h1>'+post['title']+'</h1>'
+  html << '<section class="post-content">'+content+'</section>'
+  html << html_foot
+
+  # write file and time-stamp it
+  File.open(file_path_extn, 'w') {|f| f.write(html) }
+  File.utime(Time.now,update_time,file_path_extn)
+
+  # write entry to the index page for this post
+  html_index << '<article class="post"><header class="post-header">'
+  html_index << publish_html
+  html_index << '<h2 class="post-title"><a href="' + file_name_extn + '">' + post['title'] + '</a></h2>'
+  html_index << '<section class="post-excerpt"><p>'+excerpt+'&hellip;'
+
+  # write markdown
+  log("writing markdown for post '#{post['title']}'")
+  file_name_extn = "#{file_name}.md"
+  file_path_extn = "#{file_path}.md"
+  File.open(file_path_extn, 'w') {|f| f.write(post['markdown']) }
+  File.utime(Time.now,update_time,file_path_extn)
+
+  # write markdown hyperlink to the index entry
+  html_index << '&nbsp;&nbsp;&nbsp;<small><a href="' + file_name_extn + '">(md)</a></small>'
+
+  # remove the fields that are in a file (so not written to yaml later on)
+  post.delete('html')
+  post.delete('markdown')
+
+  # hash contains data twice - with feld-name keys and with numeric index keys
+  post.delete_if {|k,v| k.is_a? Fixnum} 
+
+  # format dates as human-readable
+  post.each do |k,v|
+    post[k] = DateTime.strptime(v.to_s,'%Q').strftime("%Y-%m-%d %H:%M:%S.%L %Z") if v.to_s =~ /\d{13}/
+  end
+
+  # write everything that remains to yaml
+  log("writing yaml for post '#{post['title']}'")
+  File.open("#{file_name}.yml", 'w') {|f| f.write(post.to_yaml) }
+
+  # write yml hyperlink to the index file
+  html_index << '&nbsp;&nbsp;&nbsp;<small><a href="' + file_name + '.yml">(yml)</a>'
+  html_index << '</small></p></section></article>'
+end
+
+# write the html index file
+log("writing index")
+html_index << html_foot
+File.open("#{destination}/index.html", 'w') {|f| f.write(html_index) }
+
+log("finished")

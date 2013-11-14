@@ -23,6 +23,9 @@ of the Day](http://apod.nasa.gov/apod/astropix.htm)
 get_video_stream returns a video stream URL suitable for use by ffmpeg's
 imput parameter. It supports http://ustream.tv.
 
+ghostbuster extracts blogs from a Ghost blog (http://www.ghost.org) to
+a collection of files for static web serving or storing in a scm system
+
 git-objectvis is a small tool to graphically visualise a git repository's
 object store (http://evadeflow.com/2011/01/visualizing-git-object-graphs)
 
