@@ -28,7 +28,7 @@ http://www.opensource.org/licenses/mit-license.php
 }
 
 DESCRIPTION=%{
-ghostbuster : Extract blog content from Ghost database into files
+Ghostbuster : Extract blog content from Ghost database into files
 
 This is a tool that extracts content from a Ghost (http://www.ghost.org)
 system into files. The primary use-case is to store post data into a
@@ -89,6 +89,10 @@ extract destination (file://DESTINATION/index.html)
 Ghostbuster will, by default, extract all posts. To only extract posts
 that have been published, use the --published option.
 
+Posts will be extracted to html, markdown and yaml. To only extract to
+a subset of these, specify one or more of the --html, --markdown and
+--yaml options.
+
 Operational requirements
 ------------------------
 
@@ -97,7 +101,7 @@ The sqlite3 and sanitize gems must be installed:
   $ gem install sqlite3 sanitize
 
 Arch Linux package requirements:
-ruby     : runtime
+ruby     : runtime (ruby 2.0)
 devtools : may be required to install/build gems
 
                    (c) John Lane 2013-11-14.
@@ -108,12 +112,25 @@ devtools : may be required to install/build gems
 
 }
 
-require 'sqlite3' # gem install sqlite3
+require 'sqlite3'  # gem install sqlite3
 require 'yaml'
 require 'optparse'
 require 'fileutils'
 require 'date'
-require 'sanitize'
+require 'sanitize' # gem install sanitize
+
+def abort(m)
+  puts("#{m}. Cannot continue.")
+  exit 1
+end
+
+def log(m)
+  puts m if $verbose
+end
+
+def do_or_die(condition,log_message,error_message)
+  condition ? log(log_message) : abort(error_message)
+end
 
 options = {}
 optparse = OptionParser.new do |opts|
@@ -136,27 +153,27 @@ optparse = OptionParser.new do |opts|
    options[:published] = true
   end
 
+  options[:formats] = []
+  opts.on("--html", "Extract html") do |f|
+   options[:formats] << :html
+  end
+  opts.on("--markdown", "Extract Markdown") do |f|
+   options[:formats] << :markdown
+  end
+  opts.on("--yaml", "Extract YAML") do |f|
+   options[:formats] << :yaml
+  end
 end
 
 optparse.parse!
+
+# default format options if non explicitly given as arguments
+options[:formats] = [:html, :markdown, :yaml] if options[:formats].empty?
 
 # Positional arguments
 if ARGV.empty?
   puts optparse
   exit 1
-end
-
-def abort(m)
-  puts("#{m}. Cannot continue.")
-  exit 1
-end
-
-def log(m)
-  puts m if $verbose
-end
-
-def do_or_die(condition,log_message,error_message)
-  condition ? log(log_message) : abort(error_message)
 end
 
 source = ARGV[0].dup
@@ -204,37 +221,41 @@ query << ' where p.published_at is not null' if options[:published]
 query << ' order by p.published_at desc'
 
 # Prepare html content parts
-nl = "\n"
-meta = '<meta http-equiv="Content-Type" content="text/html" charset="UTF-8" />' + nl
-meta << '<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />' + nl
-meta << '<link rel="stylesheet" type="text/css" href="' + settings[:activeTheme] + '/assets/css/screen.css"/>' unless settings[:activeTheme].nil?
-meta << '<link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Open+Sans:700,400" />'
-meta << '<meta name="generator" content="GhostBuster" />'
+if options[:formats].include? :html
+  nl = "\n"
+  meta = '<meta http-equiv="Content-Type" content="text/html" charset="UTF-8" />' + nl
+  meta << '<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />' + nl
+  meta << '<link rel="stylesheet" type="text/css" href="' + settings[:activeTheme] + '/assets/css/screen.css"/>' unless settings[:activeTheme].nil?
+  meta << '<link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Open+Sans:700,400" />'
+  meta << '<meta name="generator" content="GhostBuster" />'
 
-html_index='<html><head>' + nl + meta + nl + '</head>'
-html_index << '<body class="home-template">' << nl
+  html_index='<html><head>' + nl + meta + nl + '</head>'
+  html_index << '<body class="home-template">' << nl
 
-cover_path = /\/content\/(.*)/.match(settings[:cover])[1]
-logo_path = /\/content\/(.*)/.match(settings[:logo])[1]
+  cover_path = /\/content\/(.*)/.match(settings[:cover])[1]
+  logo_path = /\/content\/(.*)/.match(settings[:logo])[1]
 
-html_index << '<header id="site-head" style="background-image: url('+cover_path+')">' << nl
-html_index << '<div class="vertical"><div id="site-head-content" class="inner">'
-html_index << '<h1 class="blog-title">' + settings[:title] + '</h1>'
-html_index << '<h2 class="blog-description">' + settings[:description] + '</h2>'
-html_index << '</div></div>' << nl << '</header>' << nl << '<main class="content" role="main">'
+  year = Time.now.strftime('%Y')
 
-html_head='<html><head>' + nl + meta + nl + '</head>' + nl
-html_head << '<body class="post-template"><main class="content" role="main">'
-html_head << '<article class="post"><header class="post-header">'
-html_head << '<a id="blog-logo" href="index.html"><img src="'+logo_path+'" alt="Blog Logo" /></a></header>'
+  html_index << '<header id="site-head" style="background-image: url('+cover_path+')">' << nl
+  html_index << '<div class="vertical"><div id="site-head-content" class="inner">'
+  html_index << '<h1 class="blog-title">' + settings[:title] + '</h1>'
+  html_index << '<h2 class="blog-description">' + settings[:description] + '</h2>'
+  html_index << '</div></div>' << nl << '</header>' << nl << '<main class="content" role="main">'
 
-html_foot='</main>'
-html_foot = '<footer class="site-footer"><div class="inner">'
-html_foot << '<section class="copyright">All content copyright <a href="index.html">'
-html_foot << settings[:title] << '</a> &copy; 2013 &bull; All rights reserved.</section>'
-html_foot << '<section class="poweredby">Powered by <a href="https://github.com/johnlane/random-toolbox">GhostBuster</a> by John Lane</section>'
-html_foot << '</div></footer>'
-html_foot << '</body></html>'
+  html_head='<html><head>' + nl + meta + nl + '</head>' + nl
+  html_head << '<body class="post-template"><main class="content" role="main">'
+  html_head << '<article class="post"><header class="post-header">'
+  html_head << '<a id="blog-logo" href="index.html"><img src="'+logo_path+'" alt="Blog Logo" /></a></header>'
+
+  html_foot='</main>'
+  html_foot = '<footer class="site-footer"><div class="inner">'
+  html_foot << '<section class="copyright">All content copyright <a href="index.html">'
+  html_foot << settings[:title] << '</a> &copy; '+year+' &bull; All rights reserved.</section>'
+  html_foot << '<section class="poweredby">Powered by <a href="https://github.com/johnlane/random-toolbox">GhostBuster</a> &copy;'+year+' John Lane</section>'
+  html_foot << '</div></footer>'
+  html_foot << '</body></html>'
+end
 
 db.execute(query) do |post|
   file_name = "#{post['id']} - #{post['title']}"
@@ -244,46 +265,53 @@ db.execute(query) do |post|
   update_time = DateTime.strptime(post['updated_at'].to_s,'%Q').to_time
   publish_date = post['published_at'].to_s
   publish_date = publish_date =~ /\d{13}/ ? DateTime.strptime(publish_date,'%Q').strftime("%d %b %Y") : '(draft)'
-  publish_html = '<span class="post-meta"><time>' + publish_date + '</span>'
+
 
   # write html
-  log("writing html for post '#{post['title']}'")
-  file_name_extn = "#{file_name}.html"
-  file_path_extn = "#{file_path}.html"
+  if options[:formats].include? :html
+    publish_html = '<span class="post-meta"><time>' + publish_date + '</span>'
 
-  # get html content
-  content = post['html']
+    log("writing html for post '#{post['title']}'")
+    file_name_extn = "#{file_name}.html"
+    file_path_extn = "#{file_path}.html"
 
-  # get a plain-text excerpt from content for the index page
-  content.gsub!('/content/','') # so local urls work in the html
-  excerpt = Sanitize.clean(post['html'])[0..250]
+    # get html content
+    content = post['html']
 
-  # wrte html for the post page
-  html = html_head + nl
-  html << publish_html
-  html << '<h1>'+post['title']+'</h1>'
-  html << '<section class="post-content">'+content+'</section>'
-  html << html_foot
+    # get a plain-text excerpt from content for the index page
+    content.gsub!('/content/','') # so local urls work in the html
+    excerpt = Sanitize.clean(post['html'])[0..250]
 
-  # write file and time-stamp it
-  File.open(file_path_extn, 'w') {|f| f.write(html) }
-  File.utime(Time.now,update_time,file_path_extn)
+    # wrte html for the post page
+    html = html_head + nl
+    html << publish_html
+    html << '<h1>'+post['title']+'</h1>'
+    html << '<section class="post-content">'+content+'</section>'
+    html << html_foot
 
-  # write entry to the index page for this post
-  html_index << '<article class="post"><header class="post-header">'
-  html_index << publish_html
-  html_index << '<h2 class="post-title"><a href="' + file_name_extn + '">' + post['title'] + '</a></h2>'
-  html_index << '<section class="post-excerpt"><p>'+excerpt+'&hellip;'
+    # write file and time-stamp it
+    File.open(file_path_extn, 'w') {|f| f.write(html) }
+    File.utime(Time.now,update_time,file_path_extn)
+
+    # write entry to the index page for this post
+    html_index << '<article class="post"><header class="post-header">'
+    html_index << publish_html
+    html_index << '<h2 class="post-title"><a href="' + file_name_extn + '">' + post['title'] + '</a></h2>'
+    html_index << '<section class="post-excerpt"><p>'+excerpt+'&hellip;</p>'
+    html_index << '<p style="font-size:small">' if options[:formats].count > 1
+  end
 
   # write markdown
-  log("writing markdown for post '#{post['title']}'")
-  file_name_extn = "#{file_name}.md"
-  file_path_extn = "#{file_path}.md"
-  File.open(file_path_extn, 'w') {|f| f.write(post['markdown']) }
-  File.utime(Time.now,update_time,file_path_extn)
+  if options[:formats].include? :markdown
+    log("writing markdown for post '#{post['title']}'")
+    file_name_extn = "#{file_name}.md"
+    file_path_extn = "#{file_path}.md"
+    File.open(file_path_extn, 'w') {|f| f.write(post['markdown']) }
+    File.utime(Time.now,update_time,file_path_extn)
 
-  # write markdown hyperlink to the index entry
-  html_index << '&nbsp;&nbsp;&nbsp;<small><a href="' + file_name_extn + '">(md)</a></small>'
+    # write markdown hyperlink to the index entry
+    html_index << '<a href="' + file_name_extn + '">(md)</a>' if options[:formats].include? :html
+  end
 
   # remove the fields that are in a file (so not written to yaml later on)
   post.delete('html')
@@ -298,17 +326,26 @@ db.execute(query) do |post|
   end
 
   # write everything that remains to yaml
-  log("writing yaml for post '#{post['title']}'")
-  File.open("#{file_name}.yml", 'w') {|f| f.write(post.to_yaml) }
+  if options[:formats].include? :yaml
+    log("writing yaml for post '#{post['title']}'")
+    File.open("#{file_path}.yml", 'w') {|f| f.write(post.to_yaml) }
 
-  # write yml hyperlink to the index file
-  html_index << '&nbsp;&nbsp;&nbsp;<small><a href="' + file_name + '.yml">(yml)</a>'
-  html_index << '</small></p></section></article>'
+    # write yml hyperlink to the index file
+    html_index << '<a href="' + file_path + '.yml">(yml)</a>' if options[:formats].include? :html
+  end
+
+  # end this post in the index
+  if options[:formats].include? :html
+    html_index << '</p>' if options[:formats].count > 1
+    html_index << '</section></article>'
+  end
 end
 
 # write the html index file
-log("writing index")
-html_index << html_foot
-File.open("#{destination}/index.html", 'w') {|f| f.write(html_index) }
+if options[:formats].include? :html
+  log("writing index")
+  html_index << html_foot
+  File.open("#{destination}/index.html", 'w') {|f| f.write(html_index) }
+end
 
 log("finished")
