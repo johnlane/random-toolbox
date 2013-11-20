@@ -149,6 +149,14 @@ optparse = OptionParser.new do |opts|
     options[:copydirs] = d
   end
 
+  opts.on("--with-tags TAGS", "Include only posts with these tags (comma-separated)") do |d|
+    options[:with_tags] = d
+  end
+
+  opts.on("--without-tags TAGS", "Include only posts without these tags (comma-separated)") do |d|
+    options[:without_tags] = d
+  end
+
   opts.on("-p", "--published", "Only published content") do |v|
    options[:published] = true
   end
@@ -216,9 +224,29 @@ end
 
 # Extract posts into files
 db.results_as_hash = true
-query = 'select p.*, u.name as author_name from posts p inner join users u on p.author_id = u.id'
+query = 'select distinct p.*, u.name as author_name from posts p inner join users u on p.author_id = u.id'
+
+unless options[:with_tags].nil?
+  query << ' inner join posts_tags ipt on ipt.post_id = p.id' \
+        << ' inner join (select * from tags where name in (' \
+        << options[:with_tags].split(',').map {|t| "'#{t}'" }.join(',') \
+        << ')) it on it.id=ipt.tag_id'
+end
+
+unless options[:without_tags].nil?
+  query << ' WHERE NOT EXISTS (' \
+        <<   'SELECT 1 FROM posts_tags' \
+        <<   ' INNER JOIN tags ON tags.id = posts_tags.tag_id' \
+        <<   ' WHERE posts_tags.post_id = p.id' \
+        <<   ' AND tags.name IN (' \
+        <<   options[:without_tags].split(',').map {|t| "'#{t}'" }.join(',') \
+        <<   '))'
+end
+
 query << ' where p.published_at is not null' if options[:published] 
 query << ' order by p.published_at desc'
+
+puts query
 
 # Prepare html content parts
 if options[:formats].include? :html
