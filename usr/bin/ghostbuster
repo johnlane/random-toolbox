@@ -227,27 +227,29 @@ db.results_as_hash = true
 query =  'SELECT posts.*, users.name as author_name from posts' \
      << ' INNER JOIN users ON posts.author_id = users.id'
 
+whand = ' WHERE' # initially 'where' but 'and' for subsequent clauses
 unless options[:with_tags].nil?
-  query << ' WHERE EXISTS (' \
+  query << whand << ' EXISTS (' \
         <<   'SELECT 1 FROM posts_tags' \
         <<   ' INNER JOIN tags ON tags.id = posts_tags.tag_id' \
         <<   ' WHERE posts_tags.post_id = posts.id' \
         <<   ' AND tags.name IN (' \
         <<   options[:with_tags].split(',').map {|t| "'#{t}'" }.join(',') \
         <<   '))'
+  whand = ' AND'
 end
 
 unless options[:without_tags].nil?
-  query << (options[:with_tags].nil? ? ' WHERE' : ' AND') \
-        << ' NOT EXISTS (SELECT 1 FROM posts_tags' \
+  query << whand << ' NOT EXISTS (SELECT 1 FROM posts_tags' \
         <<   ' INNER JOIN tags ON tags.id = posts_tags.tag_id' \
         <<   ' WHERE posts_tags.post_id = posts.id' \
         <<   ' AND tags.name IN (' \
         <<   options[:without_tags].split(',').map {|t| "'#{t}'" }.join(',') \
         <<   '))'
+  whand = ' AND'
 end
 
-query << ' WHERE posts.published_at IS NOT NULL' if options[:published] 
+query << whand << ' posts.published_at IS NOT NULL' if options[:published] 
 query << ' ORDER BY posts.published_at DESC'
 
 # Prepare html content parts
