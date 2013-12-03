@@ -51,3 +51,23 @@ mount -o loop floppy.img /mnt
 umount /mnt
 
 
+# Make a sparse floppy image
+dd bs=1 seek=1474560 count=0 if=/dev/zero of=floppy.img
+mkfs.msdos floppy.img
+mount -o loop floppy.img /mnt
+<-- copy files to /mnt -->
+umount /mnt
+<-- show off the sparse size -->
+$ ls -l floppy.img
+-rw-r--r-- 1 john users 1474560 Oct 15 12:58 floppy.img
+$ du floppy.img 
+24	floppy.img
+$ du --apparent-size floppy.img
+1440	floppy.img
+
+# Remove everything except specific files/directories
+# http://superuser.com/a/529861/101178
+shopt -s extglob
+rm -rf !(u|p) # remove everything except u and p
+
+
