@@ -5,3 +5,13 @@
 
 # Activate a volume group
 vgchange -a y <name of vg>
+
+# enlarge LVM volume to specified size
+lvextend --size 500G /dev/sodium/public
+
+# enlarge LVM volume by specified size
+lvextend --size +200G /dev/sodium/public
+
+# Enlarge ext4 partition on enlarged LVM volume
+# ok to do while mounted
+resize2fs /dev/sodium/public
