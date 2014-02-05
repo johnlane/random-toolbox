@@ -1,0 +1,8 @@
+Snippets for VirtualBox
+=======================
+
+Apply a new UUID to a hard drive file:
+(this allows a vdi to be copied with cp and applied to another vm)
+VBoxManage internalcommands sethduuid hd_file.vdi
+
+

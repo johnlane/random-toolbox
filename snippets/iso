@@ -4,3 +4,20 @@
 
 # Convert a directory to ISO (usable by MS-DOS)
 mkisofs -V QUAKE_CD -o quake.iso /srv/transfer/QUAKE_CD
+
+# Copy DVD to a DVD directory, decrypting
+sudo mount /dev/sr0 /mnt
+vobcopy -v -m /mnt
+sudo umount /mnt
+
+# Convert a DVD directory to an iso
+mkisofs -dvd-video -o mydvd.iso mydvd
+
+# Verify iso
+isoinfo -l -i bis_production_2013.iso
+
+# Write DVD iso to disc
+growisofs -dvd-compat -Z /dev/sr0=mydvd.iso
+
+# Write generic iso to disc
+wodim -v -sao dev=/dev/sr0 isoimage.iso

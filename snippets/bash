@@ -70,4 +70,18 @@ $ du --apparent-size floppy.img
 shopt -s extglob
 rm -rf !(u|p) # remove everything except u and p
 
+# Find and delete empty directories beneath current directory
+find -type d -empty -exec rmdir '{}' \;
+
+# Shred and delete a file
+# http://www.linuxforums.org/forum/miscellaneous/46693-how-shred-entire-directory-tree.html#post255978
+shred -u file
+
+# find and shred all files beneath a directory tree
+find -type f -execdir shred -u '{}' \;
+rm -rf *
+
+# combine PDFs
+pdfjoin a.pdf b.pdf # creates b-joined.pdf
+pdfunite a.pdf b.pdf ab.pdf
 

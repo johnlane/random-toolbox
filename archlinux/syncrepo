@@ -1,0 +1,213 @@
+#!/bin/bash
+#origin: http://sprunge.us/gGdg
+         https://bbs.archlinux.org/viewtopic.php?pid=1315915#p1315915
+
+ad=/mnt/raid/archive/archlinux  ## archive directory
+pc=pool/community
+pp=pool/packages
+pd=../../../$pp         ## packages directory
+td=$(date +%Y/%m/%d)    ## today directory
+server=mirror.csclub.uwaterloo.ca/archlinux
+url=arm.konnichi.com
+
+
+script="${0##*/}"
+_mi() { _v && echo -e "===: $*" ;}
+_me() { echo -e "===> ERROR: $*"; exit 1 ;}
+_v()  { ${verbose-false} ;}
+_u()  { cat << EOF
+usage: $script [-d YYYY/MM/DD] [-s] [-v] [-h]
+
+Setup local ArchLinux Rollback Repositories
+    -d  YYYY/MM/DD
+    -s  Synchronize Current ArchLinux Repositories
+    -v  Verbose
+    -h  Print this help message
+
+EOF
+}
+
+_check_db() {
+    local q ldb rdb
+    _mi "Checking Local and Remote DB Match..."
+    _v || q='-q'
+
+    [[ $1 == archive ]]  && dd=$td
+
+    #core/os/x86_64/core.db.tar.gz
+    ## make sure all meta files are there
+    while read -r line; do
+        repo="${line%%/*}"
+        cd "$line" || exit 1
+        [[ ! -f $repo.abs.tar.gz ]]    && wget $q "http://$url/$dd/$line/$repo.abs.tar.gz"
+        [[ ! -f $repo.db.tar.gz ]]     && wget $q "http://$url/$dd/$line/$repo.db.tar.gz"
+        [[ ! -f $repo.db.tar.gz.old ]] && wget $q "http://$url/$dd/$line/$repo.db.tar.gz.old"
+        [[ ! -f $repo.files.tar.gz ]]  && wget $q "http://$url/$dd/$line/$repo.files.tar.gz"
+        cd - &>/dev/null || exit 1
+    done < <(cd "$ad/$dd" && find core/ extra/ community/ multilib/ -mindepth 2 -path '*/os/any' -prune -o -type d -print)
+
+    ## check integrity of meta files
+    while read -r line; do
+        ldb=$(md5sum "$line" | awk '{print $1}')
+
+        wget -q -O "/tmp/${line##*/}" "http://$url/$dd/$line"
+        rdb=$(md5sum "/tmp/${line##*/}" | awk '{print $1}')
+        rm "/tmp/${line##*/}"
+
+        [[ $ldb != $rdb ]] && _me "Local DB file, ${line}, does not match remote DB file.  Date mismatch?"
+    done < <(cd "$ad/$dd" && find core/ extra/ community/ multilib/ -name "*.db.tar.gz" -type f)
+
+    _mi "Success" && echo ""
+}
+
+## Rsync today's repo
+_sync_repo() {
+    local v
+
+    [[ $var ]] || return
+
+    _mi "Syncing Current Repo..."
+    _v || q='-q'
+
+    for repo in core extra community multilib; do
+        rsync -aPh $q --bwlimit=1000 --delete --exclude=*tmp*/ "rsync://$server/$repo" "$ad"
+
+        ## Dry Run
+        #rsync -aPvhn --bwlimit=400 --exclude=pool/community "rsync://$server/$repo" "$ad"
+    done
+
+    rsync -aPh $q --bwlimit=1000 --exclude=*tmp*/ "rsync://$server/$pc/*" "$ad/$pp/"
+    rsync -aPh $q --bwlimit=1000 --exclude=*tmp*/ "rsync://$server/$pp/*" "$ad/$pp/"
+    _mi "Success" && echo ""
+    return 0
+}
+
+## When archiving current repo, move files to pool/packages and create
+## symlinks
+_archive_repo() {
+    local v
+
+    [[ $var ]] || return
+
+    _v && v="-v"
+
+    cd "$ad"
+    mkdir -p "$td"
+    ln -sf $v "${pd%/*}" "$td"
+    cp -al $v {core,extra,community,multilib} "$td"
+
+    _mi "Archiving Current Repo..."
+
+    while read -r line; do
+        #mv 2011/01/06/core/os/any/abcde-2.4.2-1-any.pkg.tar.xz pool/packages/
+        mv $v "$line" "$pp/"
+
+        #ln -s ../../../pool/packages/abcde-2.4.2-1-any.pkg.tar.xz 2011/01/06/core/os/any/
+        ln -sf $v "$pd/${line##*/}" "$line"
+    done < <(find "$td" -name "*.pkg.tar.*" -type f)   ## find pkgs, leave meta-data files
+    _mi "Success" && echo ""
+    return 0
+}
+
+## Download Packages
+_dl_pkgs () {
+    local q v dy mn yr
+
+    _v || q='-q'
+    _v && v=-v
+    [[ $foo ]] || return 0
+    [[ $dd == today ]] && dd=$td
+
+    [[ $dd =~ 20[0-2][0-9]/[0-1][0-9]/[0-3][0-9] ]]            || _me "Invalid Date"
+    yr=${dd%%/*} yr=${yr/20/}; (( 9 <= 10#$yr ))               || _me "Invalid Year"
+    mn=${dd#*/} mn=${mn%/*}; (( 1 <= 10#$mn && 10#$mn <= 12 )) || _me "Invalid Month"
+    dy=${dd##*/}; (( 1 <= 10#$dy && 10#$mn <= 31 ))            || _me "Invalid Day"
+
+    [[ $dy == 31 && $mn =~ 02|04|06|09|11 ]] && _me "Invalid Date"  ## 31 days in Feb/Apr/Jun/Sep/Nov
+    [[ $dy == 30 && $mn == 02 ]]             && _me "Invalid Date"  ## feb 30
+    [[ $dy == 29 && $yr =~ 12|16|20|24|28 ]] && _me "Invalid Date"  ## leap year
+
+    cd "$ad"
+    mkdir -p "$dd"/{core,extra,community,multilib}/os/{any,i686,x86_64}    ## Make dir for download date
+    ln -sf $v "${pd%/*}" "$dd"
+
+    _mi "Downloading Missing Archive Packages..."
+
+    while read -r line; do
+        repo="${line%%/*}"
+        cd "$line" || exit 1
+        [[ ! -f $repo.abs.tar.gz ]]    && wget $q "http://$url/$dd/$line/$repo.abs.tar.gz"
+        [[ ! -f $repo.db.tar.gz ]]     && wget $q "http://$url/$dd/$line/$repo.db.tar.gz"
+        [[ ! -f $repo.db.tar.gz.old ]] && wget $q "http://$url/$dd/$line/$repo.db.tar.gz.old"
+        [[ ! -f $repo.files.tar.gz ]]  && wget $q "http://$url/$dd/$line/$repo.files.tar.gz"
+        cd - &>/dev/null || exit 1
+    done < <(cd "$ad/$dd" && find core/ extra/ community/ multilib/ -mindepth 2 -path '*/os/any' -prune -o -type d -print)
+
+    while read line; do
+        repo="${line%/os*}" repo="${repo##*/}"
+        arch="${line##*/}"
+
+        while read db; do
+            arch_pkg_gz="${db}-${arch}.pkg.tar.gz"
+            arch_pkg_xz="${db}-${arch}.pkg.tar.xz"
+            any_pkg_gz="${db}-any.pkg.tar.gz"
+            any_pkg_xz="${db}-any.pkg.tar.xz"
+            pkg_gz="${db}.pkg.tar.gz"
+            pkg_xz="${db}.pkg.tar.xz"
+
+            cd "$ad/$pp" || exit 1
+            if [[ ! -f $arch_pkg_gz && ! -f $arch_pkg_xz &&
+                  ! -f $any_pkg_gz  && ! -f $any_pkg_xz  &&
+                  ! -f $pkg_gz      && ! -f $pkg_xz      ]]; then
+
+                { wget $q "http://$url/$line/$arch_pkg_xz" && ln -sf $v "$pd/$arch_pkg_xz" "$ad/$line" ;} ||
+                { wget $q "http://$url/$line/$arch_pkg_gz" && ln -sf $v "$pd/$arch_pkg_gz" "$ad/$line" ;} ||
+                { wget $q "http://$url/$line/$any_pkg_xz"  && ln -sf $v "$pd/$any_pkg_xz" "$ad/$line" ;}  ||
+                { wget $q "http://$url/$line/$any_pkg_gz"  && ln -sf $v "$pd/$any_pkg_gz" "$ad/$line" ;}  ||
+                { wget $q "http://$url/$line/$pkg_xz"      && ln -sf $v "$pd/$pkg_xz" "$ad/$line" ;}      ||
+                { wget $q "http://$url/$line/$pkg_gz"      && ln -sf $v "$pd/$pkg_gz" "$ad/$line" ;}      ||
+
+                { _me "\n    Archive Not Found. Tried: "{$any_,$arch_,$}pkg_{xz,gz} | \
+                    tee -a /tmp/syncrepo-missing_files
+                    echo "" ;}
+            fi
+
+            [[ -f $ad/$pp/$arch_pkg_gz && ! -L $ad/$line/$arch_pkg_gz ]] && ln -sf $v "$pd/$arch_pkg_gz" "$ad/$line"
+            [[ -f $ad/$pp/$arch_pkg_xz && ! -L $ad/$line/$arch_pkg_xz ]] && ln -sf $v "$pd/$arch_pkg_xz" "$ad/$line"
+            [[ -f $ad/$pp/$any_pkg_gz  && ! -L $ad/$line/$any_pkg_gz ]]  && ln -sf $v "$pd/$any_pkg_gz" "$ad/$line"
+            [[ -f $ad/$pp/$any_pkg_xz  && ! -L $ad/$line/$any_pkg_xz ]]  && ln -sf $v "$pd/$any_pkg_xz" "$ad/$line"
+            [[ -f $ad/$pp/$pkg_gz      && ! -L $ad/$line/$pkg_gz ]]      && ln -sf $v "$pd/$pkg_gz" "$ad/$line"
+            [[ -f $ad/$pp/$pkg_xz      && ! -L $ad/$line/$pkg_xz ]]      && ln -sf $v "$pd/$pkg_xz" "$ad/$line"
+
+        done < <(cd "$ad/$line" && tar -tf "$repo.db.tar.gz" | cut -d/ -f1 | uniq)
+
+    done < <(cd "$ad" && find "$dd" -mindepth 3 -path '*/os/any' -prune -o -type d -print)
+    _mi "Success" && echo ""
+    return 0
+}
+
+_options() {
+    unset foo
+    unset dd
+    unset var
+    unset verbose
+
+    while [[ $1 == -* ]]; do
+        case "$1" in
+            -d ) shift; dd="$1" foo=1 ;;
+            -s ) var=1          ;;
+            -v ) verbose=true   ;;
+            -h ) _u ; exit 0    ;;
+            -* ) _u ; exit 1    ;;
+            *  ) _u ; exit 1    ;;
+        esac
+        shift
+    done
+}
+
+(( $# == 0 )) && { _u ; exit 1 ;}
+_options "$@"
+_sync_repo
+_archive_repo
+_dl_pkgs
+

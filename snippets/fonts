@@ -1,0 +1,20 @@
+# Notes about fonts
+
+# some useful font sources
+http://www.urbanfonts.com
+http://www.fontsquirrel.com
+http://www.fontspring.com
+
+# font identification
+http://www.myfonts.com/WhatTheFont/
+
+# For further information see https://wiki.archlinux.org/index.php/fonts
+
+# Copy font files under /usr/share/fonts
+
+# For example, a true-type font would go in /usr/share/fonts/TTF/
+
+# After copying font files into place
+sudo fc-cache -vf
+
+

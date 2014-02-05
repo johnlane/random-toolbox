@@ -6,6 +6,9 @@
 # Activate a volume group
 vgchange -a y <name of vg>
 
+# create LVM volume
+lvcreate --size 5G -n logical_vol1 vol_grp1 
+
 # enlarge LVM volume to specified size
 lvextend --size 500G /dev/sodium/public
 
