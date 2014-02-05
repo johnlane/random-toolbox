@@ -290,7 +290,7 @@ if options[:formats].include? :html
 end
 
 db.execute(query) do |post|
-  file_name = "#{post['id']} - #{post['title']}"
+  file_name = "#{post['id']} - #{post['title'].gsub('/',':')}"
   file_path = "#{destination}/#{file_name}"
  
   # the update timestamp will be set on the files
