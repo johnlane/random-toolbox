@@ -20,13 +20,19 @@ git add -u my/path
 # http://stackoverflow.com/a/1402800/712506
 git ls-files --deleted -z | xargs -0 git rm
 
+# Rename current branch
+git branch -n newname
+
+# Rename another branch
+git branch -m oldname newname
+
 # Delete/Rename remote branch
 # http://stackoverflow.com/a/4754132/712506
 git branch new-branch-name origin/old-branch-name
 git push origin new-branch-name
 git push origin :old-branch-name
 
-# Delete remote brancg
+# Delete remote branch
 git push origin :branch-name
 # or, if a tag exists with the same name
 git push origin :refs/heads/branch-name
@@ -53,3 +59,6 @@ git log -- [file path]
 # limit the output of Git log to the last commit, i.e. the commit which delete the file
 # -1 to see only the last commit. use 2 to see the last 2 commits etc
 git log -1 -- [file path]
+
+# Show files changed between commit
+git diff --name-status HEAD^
