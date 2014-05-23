@@ -32,6 +32,14 @@ git branch new-branch-name origin/old-branch-name
 git push origin new-branch-name
 git push origin :old-branch-name
 
+# Set upstream branch
+git branch -u remote/branch
+example: git branch -u origin/master
+
+# See upstream branch
+# http://stackoverflow.com/a/4952368/712506
+git branch -vv
+
 # Delete remote branch
 git push origin :branch-name
 # or, if a tag exists with the same name
