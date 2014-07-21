@@ -1,0 +1,57 @@
+#!/usr/bin/env ruby
+#
+# Synchronise a local and remote directory tree using FTP
+# 
+# gem install net-netrc syncftp
+#
+
+require 'uri'
+require 'net/ftp'
+require 'syncftp'
+
+REMOTE = 'ftp://remoteserver.com'
+LOCAL  = '/path/to/local/mirror'
+
+$stdout.sync = true
+
+def log(m)
+  puts m
+end
+
+def abort(m)
+  puts("#{m}. Cannot continue.")
+  exit 1
+end
+
+def do_or_die(condition,log_message,error_message)
+  condition ? log(log_message) : abort(error_message)
+end
+
+abort("Local directory '#{LOCAL}' does not exist") unless File.directory?(LOCAL)
+
+remote = URI(REMOTE)
+
+host = remote.host
+
+if remote.user
+  user = remote.user
+  password = remote.password
+else
+  require 'net/netrc' # gem install net-netrc
+  if rc = Net::Netrc.locate(host)
+    user = rc.login
+    password = rc.password
+    log "Using FTP login (user='#{user}')"
+  else
+    abort "Could not obtain credentials for #{host}"
+  end
+end
+
+log "Connecting to #{host}"
+do_or_die(ftp = SyncFTP.new(host, username: user, password: password,loglevel: Logger::DEBUG),
+                                                     "Authenticated", "Login failed")
+
+log "Syncing local:#{LOCAL} to remote:#{remote.path}"
+ftp.sync(local:LOCAL, remote:remote.path, passive: true)
+
+
