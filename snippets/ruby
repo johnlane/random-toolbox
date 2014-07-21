@@ -14,3 +14,20 @@ exec('sudo', $0, *ARGV) unless Process.euid == 0
 
 # Print a stack trace at any time
 puts caller
+
+# Make standard output flush (useful for debugging)
+$stdout.sync = true
+
+# Specific install gem allows gem install from github
+# https://rubygems.org/gems/specific_install
+# https://github.com/rdp/specific_install
+gem install specific-install
+
+# to use specific-install
+gem specific_install https://github.com/johnlane/syncftp
+
+# check gem version at runtime
+$ irb
+$ require 'syncftp'
+$ Gem.loaded_specs["syncftp"].version
+=> #<Gem::Version "0.0.5.1">
