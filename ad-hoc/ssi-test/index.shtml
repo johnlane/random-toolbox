@@ -1,0 +1,31 @@
+<html>
+<head>
+<title>SSI Test</title>
+</head>
+<body>
+<p><!--#config timefmt="%T %A, %d %B %Y" --><!--#echo var="DATE_LOCAL" --></p>
+<h1>SSI Test</h1>
+<p>This is a simple test to verify that the server allows <a href=http://httpd.apache.org/docs/2.2/howto/ssi.html>server-side includes.</a></p>
+
+<p>The below content is included with <i>#include file="script/test.sh"</i></p>
+<p><!--#include file="test.sh" --></p>
+
+<p>The below content is included with <i>#include file="script/test.shtml"</i></p>
+<p><!--#include file="test.shtml" --></p>
+
+<p>The below content is included with <i>#include file="script/test.html"</i></p>
+<p><!--#include file="test.html" --></p>
+
+<p>The below content is included with <i>#include file="script/test.inc"</i></p>
+<p><!--#include file="test.inc" --></p>
+
+<p>SSI can be enabled by including the following contents in a <em>.htaccess</.em> file.</p>
+<pre>
+AddType text/html .shtml
+AddHandler server-parsed .shtml
+DirectoryIndex index.shtml index.html
+</pre>
+<p>The <a href=http://www.plus.net/home-broadband/unlimited/?WT.mc_id=sem_013>Plusnet</a> static webspace requires these directives but the CGI space does not.<br>The <i>.inc</i> file extension is not supported on the CGI space.</p>
+
+</body>
+</html>
