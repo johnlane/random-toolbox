@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# Seagate hard drive date decoder
+#
+# Specification: http://www.lerti.fr/web/public/NoteTechnique03-v1.01.pdf
+# Compare with:  http://www.westernnetworks.com/tools/seagatedatecode2.php
+#
+# Format YYWWD or YYWD, where:
+#                        YY is the year, 00 is year 1999
+#                        W or WW is the week number beginning 1
+#                        D is day of week beginning 1
+#
+# Week 1 begins on the first saturday in July of the given year.
+#
+# Usage: $1 is the code to convert
+#        $2 is an optional format (see `man date`), defaulted (see code)
+#
+########################################################## JL 20140923 ###
+
+code=$1
+[[ ${#code} =~ ^[4-5]$ ]] || { echo "bad code"; exit 1; }
+
+date_format=${2:-%A %B %-d %Y}
+
+let year=1999+${code:0:2}
+[[ ${#code} == 4 ]] && week=${code:2:1} || week=${code:2:2}
+day=${code: -1}
+
+june_last_saturday=$(cal 06 ${year} | awk '{ $6 && X=$6 } END { print X }')
+
+date -d "${year}-06-${june_last_saturday} + ${week} weeks + $((${day}-1)) days" "+${date_format}"
