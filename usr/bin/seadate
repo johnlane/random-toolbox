@@ -17,15 +17,15 @@
 #
 ########################################################## JL 20140923 ###
 
-code=$1
-[[ ${#code} =~ ^[4-5]$ ]] || { echo "bad code"; exit 1; }
-
 date_format=${2:-%A %B %-d %Y}
+regex='^(..)(..?)(.)$'
+code=$1
 
-let year=1999+${code:0:2}
-[[ ${#code} == 4 ]] && week=${code:2:1} || week=${code:2:2}
-day=${code: -1}
+[[ $code =~ $regex ]] || { echo "bad code"; exit 1; }
+year=$(( ${BASH_REMATCH[1]} + 1999 ))
+week=$(( ${BASH_REMATCH[2]} - 1))
+day=$(( ${BASH_REMATCH[3]} - 1))
 
-june_last_saturday=$(cal 06 ${year} | awk '{ $6 && X=$6 } END { print X }')
-
-date -d "${year}-06-${june_last_saturday} + ${week} weeks + $((${day}-1)) days" "+${date_format}"
+offset=$(( 6 - $(date -d "$year-07-01" +%u) ))
+july_first_saturday=$(date -d "$year-7-01 $offset days" +%d)
+date -d  "${year}-07-${july_first_saturday} ${week} weeks ${day} days" "+${date_format}"
