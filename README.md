@@ -29,6 +29,9 @@ a collection of files for static web serving or storing in a scm system
 git-objectvis is a small tool to graphically visualise a git repository's
 object store (http://evadeflow.com/2011/01/visualizing-git-object-graphs)
 
+seadate is a small script that will decode the manufacturing date code
+used on Seagate hard drives.
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
