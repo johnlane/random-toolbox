@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 #
 LICENSE="""
-Copyright (c) 2013 John Lane
+Copyright (c) 2014 John Lane
 
 MIT License
 
@@ -50,11 +50,15 @@ execute it directly:
 
     $ ./myscript
 
+If username and/or password are omitted then an attempt will be
+made to obtain them from "~/.netrc".
+
 For command help:
 
     $ telscript --help
 
                    (c) John Lane 2013-02-02.
+                    This version 2014-09-27.
                 Licensed under the MIT License. 
 
               https://github.com/johnlane/telscript
@@ -70,6 +74,7 @@ import socket
 import argparse
 import re
 import os
+import netrc
 
 def abort(error_message):
     sys.exit("%s. Cannot continue." % error_message)
@@ -137,10 +142,23 @@ def main(name, argv):
         print LICENSE
 	return 0
 
-    username = 'admin'    if args.username == None else args.username
-    password = 'password' if args.password == None else args.password
+    username = args.username
+    password = args.password
     hostname = 'localhost' if args.hostname == None else args.hostname
     ignore_regex = '^ *[#/!]' if args.ignore_regex == None else args.ignore_regex
+
+    if not (username and password):
+        try:
+          host_netrc = netrc.netrc()
+        except (IOError,netrc.NetrcParseError), e:
+            abort("Failed to read credentials for %s: %s" % (hostname,str(e)))
+
+        auth=host_netrc.authenticators(hostname)
+        if auth:
+            if not username: username = auth[0]
+            if not password: password = auth[2]
+        else:
+            abort("Insufficient credentials")
 
     verbose("Hostname: %s" % hostname)
     verbose("Username: %s" % username)
