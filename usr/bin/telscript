@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 #
 LICENSE="""
 Copyright (c) 2014 John Lane
@@ -78,6 +78,16 @@ import netrc
 
 def abort(error_message):
     sys.exit("%s. Cannot continue." % error_message)
+
+if sys.version > '3':
+    python2 = os.popen('which python2 2> /dev/null').read().rstrip()
+    if python2:
+      # http://ahmedsoliman.com/2011/09/21/auto-restarting-python-application
+      args = sys.argv[:]
+      args.insert(0,python2)
+      os.execv(python2,args)
+    else:
+      abort("%s requires Python Version 2 (python2 not in PATH)" % os.path.basename(__file__))
 
 ##############################################################################################
 # A very primitive message logger
