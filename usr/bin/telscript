@@ -191,14 +191,26 @@ def main(name, argv):
     if match_index > 0:
         abort(filter(lambda c: c not in '*\n', match_text))
 
-    # Send each input line in turn, display its output
-    for line in input:
-        line = line.rstrip('\n')
-        if line and re.match(ignore_regex,line) is None:
+    if input.isatty():
+        # Interactive mode http://stackoverflow.com/questions/26098600
+        print("Started interactive session on %s\n%s" % (hostname,match_text)),
+        while True: 
+            tn.write(input.readline() + '\r')
             try:
-                tn.write(line + "\r")
-                print(tn.read_until('=>'))
-            except Exception as e:
-                abort(e[1])
+                print(tn.read_until('{admin}=>')),
+            except EOFError:
+                break
+
+    else:
+        # Scripted mode
+        # Send each input line in turn, display its output
+        for line in input:
+            line = line.rstrip('\n')
+            if line and re.match(ignore_regex,line) is None:
+                try:
+                    tn.write(line + "\r")
+                    print(tn.read_until('=>'))
+                except Exception as e:
+                    abort(e[1])
 
 sys.exit(main(sys.argv[0], sys.argv[1:]))
