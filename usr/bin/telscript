@@ -86,7 +86,7 @@ LOG_VERBOSE = 'verbose'
 def verbose(message): log(LOG_VERBOSE,message)
 def debug(message): log(LOG_DEBUG,message)
 def log(level,message):
-    if args.loglevels != None and level in args.loglevels: print "(%s) %s" % (level,message)
+    if args.loglevels != None and level in args.loglevels: print("(%s) %s" % (level,message))
 def debug_enabled(): return args.loglevels != None and LOG_DEBUG in args.loglevels
 def verbose_enabled(): return args.loglevels != None and LOG_VERBOSE in args.loglevels
 ##############################################################################################
@@ -139,8 +139,8 @@ def main(name, argv):
     args = parser.parse_args(arglist)
 
     if args.license == True:
-        print LICENSE
-	return 0
+        print(LICENSE)
+        return 0
 
     username = args.username
     password = args.password
@@ -150,7 +150,7 @@ def main(name, argv):
     if not (username and password):
         try:
           host_netrc = netrc.netrc()
-        except (IOError,netrc.NetrcParseError), e:
+        except (IOError,netrc.NetrcParseError) as e:
             abort("Failed to read credentials for %s: %s" % (hostname,str(e)))
 
         auth=host_netrc.authenticators(hostname)
@@ -166,7 +166,7 @@ def main(name, argv):
 
     try:
         tn = Telnet(hostname)
-    except socket.error, e:
+    except socket.error as e:
         abort("Could not connect to %s (%s)" % (hostname, e[1]))
 
     # Send Username and Password
@@ -187,7 +187,7 @@ def main(name, argv):
         if line and re.match(ignore_regex,line) is None:
             try:
                 tn.write(line + "\r")
-                print tn.read_until('=>')
+                print(tn.read_until('=>'))
             except Exception as e:
                 abort(e[1])
 
