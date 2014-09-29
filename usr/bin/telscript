@@ -79,16 +79,6 @@ import netrc
 def abort(error_message):
     sys.exit("%s. Cannot continue." % error_message)
 
-if sys.version > '3':
-    python2 = os.popen('which python2 2> /dev/null').read().rstrip()
-    if python2:
-      # http://ahmedsoliman.com/2011/09/21/auto-restarting-python-application
-      args = sys.argv[:]
-      args.insert(0,python2)
-      os.execv(python2,args)
-    else:
-      abort("%s requires Python Version 2 (python2 not in PATH)" % os.path.basename(__file__))
-
 ##############################################################################################
 # A very primitive message logger
 LOG_DEBUG = 'debug'
@@ -101,7 +91,7 @@ def debug_enabled(): return args.loglevels != None and LOG_DEBUG in args.logleve
 def verbose_enabled(): return args.loglevels != None and LOG_VERBOSE in args.loglevels
 ##############################################################################################
 
-class Telnet(telnetlib.Telnet):
+class Telnet(telnetlib.Telnet,object):
     pass
     def readit(self,expected):
         received = self.read_until(expected,5)
@@ -109,6 +99,22 @@ class Telnet(telnetlib.Telnet):
             verbose(received)
         else:
             abort("Unexpected reply from server:Expected '%s', got '%s'" % (expected,received))
+
+    if sys.version > '3':
+        def read_until(self,expected,timeout=None):
+            expected = bytes(expected, encoding='utf-8')
+            received = super(Telnet,self).read_until(expected,timeout)
+            return str(received, encoding='utf-8')
+
+        def write(self,buffer):
+            buffer = bytes(buffer, encoding='utf-8')
+            super(Telnet,self).write(buffer)
+
+        def expect(self,list,timeout=None):
+            for index,item in enumerate(list):
+                list[index] = bytes(item, encoding='utf-8')
+            match_index, match_object, match_text = super(Telnet,self).expect(list,timeout)
+            return match_index, match_object, str(match_text, encoding='utf-8')
 
 def main(name, argv):
 
