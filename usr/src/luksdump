@@ -1,0 +1,29 @@
+LUKSDUMP
+========
+
+`luksdump` is a limited example to demonstrate how to extract a LUKS master key.
+
+It follows the LUKS [specification][1] but is only implemented for volumes that
+use the `aes-xts-plain64` cipher mode. It: 
+
+* requests a pass phrase from the user
+* hashes the pass phrase using PBKDF2 function to create a key 
+* uses that key to decrypt the master "key material" stored in the LUKS header into a split key 
+* Run the split_key through the AFSplitter merge function to get the master key 
+* hash the master key and compare with the master key hash stored in the LUKS header
+
+The `aes-xts-plain64` is a 128-bit AES cipher but the XTS mode takes a double-length
+key that is split in two. The cipher key size is therefore shown as 256 bits.
+
+Note that decryption is performed one sector (512 bytes) at a time and that the
+initialisation vector for a sector is the sector number written to the front of
+a block of zero bytes as long as the cipher block size (128 bits).
+
+The details about the LUKS header and how to extract the master key came from the 
+LUKS disk format [specification][1] and from the `cryptsetup` [source code][2].
+
+Dependency: Gem `afsplitter`, available from RubyGems.
+
+[1]:http://wiki.cryptsetup.googlecode.com/git/LUKS-standard/on-disk-format.pdf "LUKS On-Disk Format Specification, Version 1.2.1"
+[2]:https://code.google.com/p/cryptsetup/source/browse "git clone https://code.google.com/p/cryptsetup"
+[3]:https://github.com/mikelolasagasti/revelation/blob/master/src/bundle/luks.py

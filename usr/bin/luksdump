@@ -1,0 +1,177 @@
+#!/usr/bin/ruby
+#
+# An example to demonstrate parsing and decrypting the master key for a LUKS volume
+#
+# Limitations - only the default LUKS cipher 'aes-xts-plain64' is implemented. The 
+#               main difference is how the initialisation vector is derived.
+#
+
+# Use EITHER the Ruby OR  the FFI (binary) AFSplitter implementation. Uncomment ONE option!
+#AFSPLITTER = 'afsplitter'
+AFSPLITTER ='afsplitter_ffi'
+
+require 'openssl'
+require AFSPLITTER
+
+def abort(s)
+  puts "#{s}. Cannot continue."
+  exit 1
+end
+
+def bytestring(hexstring)
+  hexstring.scan(/../).map { |x| x.hex.chr }.join
+end
+def hexstring(bytestring)
+  bytestring.each_byte.map { |b| b.to_s(16).rjust(2,'0') }.join
+end 
+
+# put a field (like 'puts' but putputs a formatted header field
+def putfield(format,key,value)
+  format = 'a' if format.nil?
+  field = "#{key} : #{format =~ /^a.*$/ ? hexstring(value) : value}"
+  field = field[0..40] + '...'+ field[-40..-1] if field.size > 80 # centre-truncate long strings
+  puts field
+end
+
+# accept LUKS volume as solitary command-line argument, otherwise assume a default
+VOLUME = ARGV.count == 1 ? ARGV[0] : 'test.luks'
+
+LUKS_MAGIC="LUKS"+0xba.chr+0xbe.chr
+LUKS_KEY_DISABLED = 0x0000DEAD
+LUKS_KEY_ENABLED  = 0x00AC71F3
+LUKS_DIGEST_SIZE  = 20
+SECTOR_SIZE = 512
+HDR_SIZE = 4096
+
+# LUKS data types are BIG ENDIAN (network byte order)
+HDR_FIELDS = { magic: 'a6',
+               version: 'n',
+               cipher_name: 'Z32',
+               cipher_mode: 'Z32',
+               hash_spec: 'Z32',
+               payload_offset: 'N',
+               key_bytes: 'N',
+               mk_digest: 'a20',
+               mk_digest_salt: 'a32',
+               mk_digest_iter: 'N',
+               uuid: 'Z40',
+               key_slots: 'a240'
+             }
+
+KS_FIELDS =  { active: 'N',
+               iterations: 'N',
+               salt: 'a32',
+               key_material_offset: 'N',
+               stripes: 'N'
+             }
+
+begin
+  vol=File.open(VOLUME,'rb')
+  hdr=vol.read(HDR_SIZE)
+rescue
+  abort "Unable to open '#{VOLUME}'"
+end
+
+# Check the header magic value before proceeding
+if hdr[0,6].force_encoding("ASCII-8BIT") != LUKS_MAGIC
+  puts "Not a LUKS volume"
+  exit 1
+end
+
+# Unpack the header fields
+hdr = hdr.unpack(HDR_FIELDS.values.join).each_with_object({}).with_index {|(f,h),i| h[HDR_FIELDS.keys[i]] = f}
+
+# Unpack the key slots into the header
+hdr[:key_slot]=[]
+hdr[:key_slots].unpack('a48 a48 a48 a48 a48 a48 a48 a48').each_with_index do |ks,i|
+  hdr[:key_slot][i] = ks.unpack(KS_FIELDS.values.join).each_with_object({}).with_index {|(f,h),i| h[KS_FIELDS.keys[i]] = f}
+
+  # Get the key material for enabled slots
+  if hdr[:key_slot][i][:active] == LUKS_KEY_ENABLED
+    puts "slot enabled, getting key material"
+    vol.seek(hdr[:key_slot][i][:key_material_offset]*SECTOR_SIZE)
+    hdr[:key_slot][i][:key_material] = vol.read(hdr[:key_bytes] * hdr[:key_slot][i][:stripes])
+  end
+end
+hdr.delete(:key_slots)
+
+hdr.each do |k,v|
+  if k == :key_slot then
+    v.each_with_index do |ks,i|
+      case ks[:active]
+      when LUKS_KEY_DISABLED
+        puts "key slot #{i} is disabled"
+      when nil
+        puts "key slot #{i} is empty"
+      when LUKS_KEY_ENABLED
+        puts "key slot #{i} is enabled"
+        ks.each { |k,v| putfield(KS_FIELDS[k],k,v) unless k == :active }
+      else
+        puts "unexpected key slot active flag = #{ks[:active]} for key slot #{i}"
+        p ks
+      end
+    end
+  else
+    if HDR_FIELDS[k] =~ /^a6/
+      puts "#{k} : #{v[0,4]} #{hexstring v[4,2]}" # special case for magic value
+    else
+      putfield(HDR_FIELDS[k],k,v)
+    end
+  end
+end
+
+# Cipher details
+abort "This example supports the 'aes-xts-plain64' cipher only" unless (hdr[:cipher_name]+'-'+hdr[:cipher_mode]) == 'aes-xts-plain64'
+
+cipher_spec = 'aes-128-xts'
+cipher_block_size = 16 # bytes
+
+# Ask for pass phrase
+puts "Pass phrase?"
+passphrase=STDIN.gets.chomp
+
+# Attempt master key recovery
+hdr[:key_slot].each do |ks|
+  next unless ks[:active] == LUKS_KEY_ENABLED
+  pwd_pbkdf2 = OpenSSL::PKCS5.pbkdf2_hmac_sha1(passphrase,
+                                               ks[:salt],
+                                               ks[:iterations],
+                                               hdr[:key_bytes])
+
+  # Decrypt key material using the hashed passphrase one sector at a time
+  # Sector zero is the beginning of the key material
+  km_size = hdr[:key_bytes] * ks[:stripes]
+  km_num_sectors = (km_size / SECTOR_SIZE.to_f).ceil # whole sectors
+
+  cipher = OpenSSL::Cipher.new(cipher_spec)
+  cipher.decrypt
+  cipher.padding = 0
+  cipher.key = pwd_pbkdf2
+
+  split_key = ''
+  (0...km_num_sectors).each do |s|
+    cipher.reset # resets the cipher after prior iteration, keeping the key for re-use 
+
+    # The IV is a # 64-bit little-endian bytestring conaining sector offset (8 bytes)
+    # and then padded out with trailing zeroes to the cipher's block size
+    cipher.iv = [s].pack("Q<")+"\0"*(cipher_block_size - 8)
+
+    # Decrypt this sector
+    split_key += cipher.update(ks[:key_material][s*SECTOR_SIZE,SECTOR_SIZE]) + cipher.final
+  end
+ 
+  # Merge the split key
+  key = Afsplitter.merge(split_key, ks[:stripes], hdr[:hash_spec])
+
+  # Compare derived key with the known digest
+  key_pbkdf2 = OpenSSL::PKCS5.pbkdf2_hmac_sha1(key,
+                                               hdr[:mk_digest_salt],
+                                               hdr[:mk_digest_iter],
+                                               LUKS_DIGEST_SIZE)
+
+  # Report goodness and stop, otherwise iterate to next key slot
+  if key_pbkdf2 == hdr[:mk_digest]
+    puts "Master Key: #{hexstring key}"
+    break
+  end
+end
