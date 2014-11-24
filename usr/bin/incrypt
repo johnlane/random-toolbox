@@ -1,0 +1,209 @@
+#!/bin/bash
+#
+# incrypt - a tool to perform in-place alterations to device encryption
+#
+# it will convert to and from unencrypted, dm-crypt(plain) and dm-crypt(LUKS) formats
+#
+# See also http://johnlane.ie/incrypt-in-place-crypto-conversion.html
+# Download https://raw.githubusercontent.com/johnlane/random-toolbox/master/usr/bin/incypt
+#
+# Part of the Random Toolbox https://github.com/johnlane/random-toolbox
+# (c) John Lane 2014-11-10 Published under the MIT License.
+#
+# JL20141110
+#
+# This is pre-alpha software that could easily destroy data: use with caution!
+#
+############################################################################# JL20141110 ###
+
+log() { echo $@; }
+abort() { log "$@. Cannot continue."; exit 1; }
+usage() {
+  echo "Usage: $0 raw-device-or-file [convert-from] convert-to"
+  echo "       convert between raw (unencrypted), plain or luks"
+  echo "       convert-from will autodetect if not specified"
+  exit 0
+}
+
+# Run as root
+[[ $EUID == 0 ]] || { sudo $0 "$@"; exit; }
+
+# Command-line arguments
+[[ "$#" -ge 2 && (-f "$1" || -b "$1") ]] || usage
+raw_device=$1; shift
+[[ "$#" -ge 2 ]] && from_crypto="$1" && shift
+to_crypto="$1"; shift
+
+# Convert a hex digit string into a binary byte string
+# http://stackoverflow.com/a/25724518
+hex2bin() {
+  local b=''
+  local i=0
+  test $((${#1} & 1)) == 0 || abort "Encountered hex stream with an odd number of characters"
+  for ((i=0; i<${#1}; i+=2));do b+=\\x${1:$i:2};done
+  printf "$b"
+}
+
+# Wrapper around 'mktemp' to collect files and provide a cleanup function to securely delete them
+tempfiles=()
+tempfile() {
+  local var=$1; shift
+  local t=$(mktemp "$@")
+  tempfiles+=("$t")
+  eval ${var}="$t"
+}
+cleanup() { for f in "${tempfiles[@]}"; do shred $f; done; }
+
+# try to detect any crypto on the raw device unless explicitly given
+if [[ -z "${from_crypto}" ]]
+then
+  case $(blkid -s TYPE -o value "${raw_device}") in
+    crypto_LUKS)
+      cryptsetup isLuks "${raw_device}" || abort "detected ${raw_device} as LUKS but check failed"
+      from_crypto=luks
+      ;;
+    '')
+      abort "Unable to autodetect type of ${raw_device}. Please specify type explicitly"
+      ;;
+    *)
+      from_crypto=raw
+  esac
+fi
+
+# proceed only with known crypto
+[[ "${from_crypto}" == "${to_crypto}" ]] && abort "Pointless converting $from_crypto to $to_crypto"
+[[ "${from_crypto}" =~ ^(raw|plain|luks)$ ]] || abort "cannot convert from '${from_crypto}'"
+[[ "${to_crypto}" =~ ^(raw|plain|luks)$ ]] || abort "cannot convert to '${to_crypto}'"
+echo "Converting ${raw_device} from ${from_crypto} to ${to_crypto}" 
+
+# need to whether to re-encrypt when converting luks to plain
+if [[ "${from_crypto}" == 'luks' && "${to_crypto}" == 'plain' ]]
+then
+  [[ "$#" -gt 0 ]] && reencrypt_luks="${1:0:1}" && reencrypt_luks=${reencrypt_luks^} && shift
+  [[ "${reencrypt_luks}" =~ ^(Y|N)$ ]] || abort "Need to know whether to reencrypt"
+fi
+
+# default arguments for plain-mode dm-crypt or override with any remaining command-line arguments
+[[ "$#" -gt 0 ]] && cryptsetup_args="$*" || cryptsetup_args="--cipher aes-xts-plain64 --key-size=512 --hash sha512"
+    
+tempfile tmp # Create a temporary file
+
+if [[ "$to_crypto" == 'plain' ]]
+then
+
+  if [[ "${from_crypto}" == 'luks' && "${reencrypt_luks}" == 'Y' ]]
+  then
+    # create luks device mapper to copy from
+    echo Enter the current luks dm-crypt passphrase when prompted
+    cryptsetup open "${raw_device}" incrypt-src
+    src="/dev/mapper/incrypt-src"
+
+    # create the destination device mapper
+    echo "Choose a new passphrase for plain dm-crypt"
+    cryptsetup open "${raw_device}" incrypt --type plain ${cryptsetup_args}
+    dst="/dev/mapper/incrypt"
+
+  elif [[ "${from_crypto}" == 'luks' && "${reencrypt_luks}" == 'N' ]]
+  then
+    # retrieve luks master key and offset
+    echo Enter the current luks dm-crypt passphrase when prompted
+    cryptsetup open "${raw_device}" incrypt
+    dmsetup table --target crypt --showkey /dev/mapper/incrypt > $tmp
+    cryptsetup close incrypt
+    dm_type=$(awk '{print $3}' $tmp)
+    [[ "$dm_type" == "crypt" ]] || abort "Unexpected device mapper '$dm_type' for ${raw_device}"
+    master_key=$(awk '{print $5}' $tmp)
+    dd_skip="skip=$(awk '{print $8}' $tmp)" # skip the offset to the beginning of data
+    src="$raw_device"
+    dst="$src"
+    keyfile=$(blkid -s UUID -o value "${raw_device}").key.bin
+    ( hex2bin $master_key ) > "${keyfile}"
+    echo "Key written to $keyfile"
+  else # raw to plain conversion
+    src="$raw_device"
+
+    # create the destination device mapper
+    echo "Choose a passphrase for plain dm-crypt"
+    cryptsetup open "${raw_device}" incrypt --type plain ${cryptsetup_args}
+    dst="/dev/mapper/incrypt"
+
+  fi
+
+  # convert in-place with visual progress feedback
+  dd if="${src}" ${dd_skip} 2>/dev/null | mbuffer | dd conv=notrunc of="${dst}" 2>/dev/null
+
+elif [[ "$to_crypto" == 'luks' ]]
+then
+
+  # Check the raw device and get encryption parameters
+  if [[ "$from_crypto" == "plain" ]]
+  then
+    echo Enter the current plain dm-crypt passphrase when prompted
+    cryptsetup open "${raw_device}" incrypt --type plain ${cryptsetup_args}
+    dmsetup table --target crypt --showkey /dev/mapper/incrypt > $tmp
+    cryptsetup close incrypt
+    start_sector=$(awk '{print $1}' $tmp)
+    num_sectors=$(awk '{print $2}' $tmp)
+    dm_type=$(awk '{print $3}' $tmp)
+    [[ "$dm_type" == "crypt" ]] || abort "Unexpected device mapper '$dm_type' for ${raw_device}"
+    cipher=$(awk '{print $4}' $tmp)
+    master_key=$(awk '{print $5}' $tmp)
+    master_key_size=$(( ${#master_key} * 4 ))
+
+    tempfile master_key_file
+    ( hex2bin $master_key ) > "${master_key_file}"
+  fi
+
+  # Create a temporary LUKS device (we only want the header)
+  echo "Creating LUKS header: choose a passphrase when prompted"
+  args=''
+  [[ -n "$master_key_file" ]] && args+=" --master-key-file $master_key_file"
+  [[ -n "$master_key_size" ]] && args+=" --key-size $master_key_size"
+  [[ -n "$cipher" ]] && args+=" --cipher $cipher"
+  head -c 2M /dev/urandom > $tmp # make a file big enough to hold a LUKS header
+  cryptsetup luksFormat $tmp $args
+
+  # Extract the LUKS header
+  tempfile hdr -u             # header dump file must not exist
+  cryptsetup luksHeaderBackup $tmp --header-backup-file $hdr
+  offset=$(cryptsetup luksDump $hdr | sed -nr 's/^Payload offset:\s*(.*)/\1/p')
+
+  # Move the payload to make room for the header
+  echo "Moving data by $offset sectors ($(($offset * 512)) bytes) to make space for LUKS header"
+  dd if="${raw_device}" 2>/dev/null | mbuffer -s 512 -b ${offset} -P 100 | dd of="${raw_device}" seek="${offset}" conv=notrunc 2>/dev/null
+
+  # Write the header
+  echo "Writing header"
+  dd if="${hdr}" of="${raw_device}" conv=notrunc 2>/dev/null
+
+  if [[ "$from_crypto" == 'raw' ]]
+  then
+    # create a device mapper
+    echo "Enter LUKS passphrase again"
+    cryptsetup open "${raw_device}" incrypt
+
+    # convert in-place with visual progress feedback
+    echo "Encrypting raw data"
+    dd if="${raw_device}" skip="${offset}" 2>/dev/null | mbuffer | dd conv=notrunc of=/dev/mapper/incrypt 2>/dev/null
+
+  fi
+
+elif [[ "$to_crypto" == 'raw' ]]
+then
+
+  # Create a device mapper to read from
+  cryptsetup isLuks "${raw_device}" && cryptsetup open "${raw_device}" incrypt || cryptsetup open "${raw_device}" incrypt --type plain ${cryptsetup_args}
+
+  # convert in-place with visual progress feedback
+  dd if=/dev/mapper/incrypt 2>/dev/null | mbuffer | dd of="${raw_device}" conv=notrunc 2>/dev/null
+
+fi
+
+# destroy any device mappers
+sleep 1 # avoid "device-mapper: remove ioctl on incrypt failed: Device or resource busy"
+for dm in incrypt incrypt-src
+do
+  [[ -f "/dev/mapper/$dm" ]] && cryptsetup close "$dm"
+done
+
+cleanup
