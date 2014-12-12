@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+# Calculate minimum size for LUKS detached header file
+# Algorithm as per cryptsetup sources:
+# https://code.google.com/p/cryptsetup/source/browse/lib/luks1/keymanage.c#40
+# https://code.google.com/p/cryptsetup/source/browse/lib/luks1/af.c#152
+# https://code.google.com/p/cryptsetup/source/browse/lib/utils_device.c#444
+#
+# JL 20141212
+
+key_size=${1:-256}
+[[ "$key_size" -gt 0 ]] || { echo "usage: $0 <key-size-bits>"; exit 1; } 
+
+LUKS_ALIGN_KEYSLOTS=4096
+LUKS_STRIPES=4000
+LUKS_NUMKEYS=8
+SECTOR_SIZE=512
+
+size_round_up() {
+  local size=${!1}
+  local block=$2
+  eval $1=$(( (size + (block -1)) / block * block ))
+}
+
+af_split_sectors() {
+  local blocksize=$1
+  local blocknumbers=$2
+  eval $3=$(( ((blocksize * blocknumbers) + (SECTOR_SIZE - 1)) / SECTOR_SIZE ))
+}
+
+echo -n "$key_size "
+key_size=$((key_size / 8))
+echo "bit key ($key_size bytes)"
+
+km_size=$(( LUKS_ALIGN_KEYSLOTS / SECTOR_SIZE ))
+
+af_split_sectors $key_size $LUKS_STRIPES keyslot_sectors
+sector=$km_size
+for i in $(seq 1 $LUKS_NUMKEYS)
+do
+  size_round_up sector $km_size
+  let 'sector+=keyslot_sectors'
+done
+
+echo "LUKS header requires $sector sectors ($((sector*512)) bytes; $( bc <<< "scale=4;$sector/2048") MiB)"
