@@ -18,7 +18,7 @@ site_url=${uk_site_url}
 # Default to today's image
 # or specified day in $1, format yymmdd (e.g. 121124)
 # Images are organised by year+month (e.g. 1301 is January 2013)
-if [[ $n =~ [0-9]{6} ]]; then
+if [[ $1 =~ [0-9]{6} ]]; then
 
     page="ap${1}.html"
     period=${1:0:4}
