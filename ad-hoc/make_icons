@@ -1,0 +1,46 @@
+#!/usr/bin/make -f
+#
+# Makefile to generate image files from SVG for square icons at given sizes
+#
+# Uses ImageMagick to maintain aspect ratio within requested size.
+# To use Inkscape see http://stackoverflow.com/a/18212048 first.
+# 
+# JL 20150430
+
+define img_template
+
+all : $(1).$(2).$(3)
+
+%.$(2).$(3) : %.svg
+	@echo writing $$@ ...
+#	@inkscape -z -e $$@ -w $(2) -h $(2) $$<
+	@convert -resize $(2)x$(2) $$< $$@
+
+endef
+
+IMAGES = Cubie_logo Raspberry_Pi_Logo
+SIZES = 32 48 120
+FORMATS = bmp png jpg
+
+$(foreach image, $(IMAGES),\
+  $(foreach size, $(SIZES),\
+    $(foreach format, $(FORMATS),\
+      $(eval $(call img_template,$(image),$(size),$(format)))\
+    )\
+  )\
+)
+
+# Remove generated images, not downloaded svg files
+clean : 
+	@rm -f $(foreach format, $(FORMATS), *.$(format))
+
+# Remove everything. 
+mrproper : clean
+	@rm -f *.svg
+
+Cubie_logo.svg :
+	@wget -nv http://upload.wikimedia.org/wikipedia/commons/b/b1/Cubie_logo.svg
+
+Raspberry_Pi_Logo.svg :
+	@wget -nv https://upload.wikimedia.org/wikipedia/en/c/cb/Raspberry_Pi_Logo.svg
+

@@ -1,0 +1,84 @@
+#!/usr/bin/make -f
+#                                                                         #
+# make_mediatomb_icons                                                    #
+#                                                                         #
+# Generate alternative icons for MediaTomb (http://mediatomb.cc)          #
+#                                                                         #
+# Downloads source files from the internet and generates sets of square   #
+# icons with the specified sizes and formats. Each icon set is stored in  #
+# its own directory. Icon files are named according to MediaTomb's needs. #
+#                                                                         #
+# Uses ImageMagick to maintain aspect ratio within requested size.        #
+# To use Inkscape see http://stackoverflow.com/a/18212048 first.          #
+#                                                                         #
+# Usage:                                                                  # 
+#      $ make_mediatomb_icons            # Makes everything               #
+#      $ make_mediatomb_icons Tux        # Make the "Tux" icon set only   #
+#      $ make_mediatomb_icons clean      # Remove all generated icons     #
+#      $ make_mediatomb_icons mrproper   # Remove everything              #
+#                                                                         #
+# Copy chosen icon set into /usr/share/mediatomb/web/icons.               #
+#                                                                         #
+# GNU Make version 4.0 (x86_64-unknown-linux-gnu)                         #
+#                                                                         #
+# https://github.com/johnlane/random-toolbox                              #
+#                                                                         #
+########################################################## JL 20150501 ####
+
+IMAGES = https://upload.wikimedia.org/wikipedia/commons/d/dc/Film_Reel.svg \
+	 https://upload.wikimedia.org/wikipedia/commons/3/3a/Mplayer.svg \
+	 https://upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg \
+         https://upload.wikimedia.org/wikipedia/en/c/cb/Raspberry_Pi_Logo.svg \
+	 https://upload.wikimedia.org/wikipedia/commons/b/b1/Cubie_logo.svg
+
+SIZES = 32 48 120
+FORMATS = bmp png jpg
+
+.PHONY : all clean mrproper
+
+define for_each_image_format
+
+all : $(basename $(1))/mt-icon$(2).$(3)
+
+# image-set target allows "make image-set" for example "make Tux"
+$(basename $(1)) : $(basename $(1))/mt-icon$(2).$(3)
+
+$(basename $(1))/mt-icon$(2).$(3) : $(basename $(1))/$(1)
+	@echo writing $$@ ...
+#	@inkscape -z -e $$@ -w $(2) -h $(2) $$<
+	@convert -density 200 -resize $(2)x$(2) $$< $$@
+
+endef
+
+define for_each_image_set
+
+$(basename $(notdir $(1)))/$(notdir $(1)) :
+	@mkdir -p $(basename $(notdir $(1)))
+	@echo  downloading $(notdir $(1))
+	@(cd $(basename $(notdir $(1))); curl -#O $(1))
+
+$(foreach size, $(SIZES),\
+  $(foreach format, $(FORMATS),\
+    $(eval $(call for_each_image_format,$(notdir $(1)),$(size),$(format)))\
+  )\
+)
+
+endef
+
+$(foreach image, $(IMAGES),\
+  $(eval $(call for_each_image_set,${image}))\
+)
+
+# Remove generated images, not downloaded source files (or anything else there present)
+clean :
+	@rm -f $(foreach image, $(basename $(notdir $(IMAGES))),\
+                 $(foreach size, $(SIZES),\
+                   $(foreach format, $(FORMATS),\
+                     $(image)/mt-icon$(size).$(format)\
+		   )\
+                 )\
+               )
+
+# Remove everything. (yes, everything. Really. Even things not created by this script!)
+mrproper :
+	@rm -rf $(basename $(notdir $(IMAGES)))
