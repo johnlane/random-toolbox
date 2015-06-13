@@ -1,0 +1,11 @@
+# Snippets for "tar"
+
+# Ignore sockets during tar backup
+# http://blog.aplikacja.info/2013/04/ignore-sockets-during-tar-backup/
+# avoids errors due to tar not being able to archive socket files
+cd /
+sudo find . -type s > /tmp/sockets.lst
+if sudo tar zcvpf $TMP_FILE --one-file-system --exclude-from=/tmp/sockets.lst -C / .
+then
+    echo backup OK
+fi
