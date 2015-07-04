@@ -1,0 +1,214 @@
+#!/bin/bash
+#
+# Open a terminal suitable for use as
+# a screen shot in documentation, etc.
+#
+#                           JL 20150702
+
+help() {
+myname=$(basename $0)
+cat <<-EOF
+
+
+	${myname}: John's Terminal Starter
+
+	Opens a new terminal window and styles it so that it has a nice appearance
+	for screenshotting. It sets foreground and background colours, the terminal
+	window's title, size and font. It can either run a command or drop to a
+	bash prompt.
+	
+
+	    -d              Display this help screen
+	    -L              Display the license and copyright notices
+	    -p              Prompt text (defaults to '${prompt}').
+	    -t              Title text  (defaults to '${title}').
+	    -b              Background colour (defaults to '${background}')
+	    -f              Foreground colour (defaults to '${foreground}')
+	    -F              Font colour       (defaults to '${font}')
+	    -g              Geometry          (defaults to '${geometry}')
+	    -c              Write a command to the command-prompt
+	    -s              Write a screenshot command to the command-prompt
+	    -T              Theme (sets all of the above unless overridden)
+	    -v              Verbose
+
+	If the -s option is used, a a screenshot command is sent to the the original
+	terminal that can be used to take a screenshot. If "xdotool" is available then
+	this will be written on the following command-line so that it can be executed
+	by pressing <enter>. If "xdotool" is not available then the command will be
+	echoed so that the user can copy or re-type it.
+
+	Support
+
+	  Please raise any issues at http://github.com/johnlane/random-toolbox
+
+	License
+
+	  MIT License. Please do "${myname} -L" to display the full license text.
+
+EOF
+exit
+}
+
+license() {
+cat <<-EOF
+	Copyright (c) 2015 John Lane
+	
+	MIT License
+	
+	Permission is hereby granted, free of charge, to any person obtaining
+	a copy of this software and associated documentation files (the
+	"Software"), to deal in the Software without restriction, including
+	without limitation the rights to use, copy, modify, merge, publish,
+	distribute, sublicense, and/or sell copies of the Software, and to
+	permit persons to whom the Software is furnished to do so, subject to
+	the following conditions:
+	
+	The above copyright notice and this permission notice shall be
+	included in all copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+	MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+	LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+	OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	
+	http://www.opensource.org/licenses/mit-license.php
+	EOF
+exit
+}
+
+theme() {
+  # Use X11 colours; see https://en.wikipedia.org/wiki/X11_color_names
+  # Use fixed fonts; see https://en.wikipedia.org/wiki/Fixed_(typeface)
+
+  # Defaults
+  title="Terminal"
+  prompt=$(hostname -s)
+  font="10x20"
+  geometry="80x24" # thank the vt100 for the default terminal size!
+
+  # Screenshot command to output to original terminal's input buffer
+  screenshot_command="xwd -frame > /tmp/screenshot.xwd"
+
+  case "$1" in
+    blue)
+      background="Midnight Blue"
+      foreground="Light Steel Blue"
+      ;;
+    red)
+      background="Dark Salmon"
+      foreground="Dark Red"
+      ;;
+    vt100-green)
+      background="Black"
+      foreground="Chartreuse"
+      ;;
+    vt100-amber)
+      background="Black"
+      foreground="Goldenrod"
+      ;;
+    mono-black)
+      background="Black"
+      foreground="White"
+      ;;
+    mono-white)
+      background="White"
+      foreground="Black"
+      ;;
+    wide)
+      geometry="132x24"
+      ;;
+    *) echo "Unknown theme '$1'"
+       exit 1
+  esac
+}
+
+# Default theme
+theme blue
+
+# Options
+while getopts "hLc:st:p:f:F:b:g:T:v" opt
+do
+  case "${opt}" in
+    h) help                                 ;;
+    L) license                              ;;
+    T) theme "${OPTARG}";                   ;; # First so overrides possible
+    c) ib_command=${OPTARG}                 ;;
+    s) ib_command=${screenshot_command}     ;;
+    t) title="${OPTARG}";                   ;;
+    p) prompt="${OPTARG}";                  ;;
+    f) foreground="${OPTARG}";                      ;;
+    F) font="${OPTARG}";                    ;;
+    b) background="${OPTARG}";                      ;;
+    g) geometry="${OPTARG}";                ;;
+    v) verbose=1;                           ;;
+  esac
+done
+shift $((OPTIND-1)) # Shift off the options and optional --
+
+# Use what's left as command
+command="$*"
+
+script=$(mktemp)
+
+cat>$script <<END_SCRIPT
+
+# Custom prompt command
+# not needed; set via -title arg to urxvt instead.
+# PROMPT_COMMAND='printf "\033]0;$title\007"'
+unset PROMPT_COMMAND
+
+# Large Font
+printf '\e]710;%s\007' "$font"
+
+# Prompt
+PS1="[\u@$prompt]$ "
+
+# Normal RC
+#test -r /etc/bash.bashrc && . /etc/bash.bashrc
+#test -r ~/.bashrc && . ~/.bashrc
+
+# Self-destruct
+rm $script
+
+echo \$#
+
+# Run optional command
+if [[ -n "$command" ]]
+then
+  $command
+  exit
+fi
+
+END_SCRIPT
+
+[[ "x$verbose" != x ]] && cat $script
+
+if [[ -n "$ib_command" ]]
+then
+  which xdotool &>/dev/null # && xdotool type "$ib_command" || echo "$ib_command"
+  if [[ $? == 0 ]]
+  then
+    # only in X window; unfortulately text is pre-echoed so appears twice!
+    xdotool type "$ib_command"
+  else
+    # http://unix.stackexchange.com/questions/213799
+    # unfortunately bind doesn't work in a subshell!
+    # bind "\"\e[0n\": '$ib_command'"; printf '\e[5n'
+    echo "$ib_command" # because the above doesn't work!
+  fi
+fi
+
+# Prepare options to include
+opts=(foreground background geometry title)
+for opt in ${opts[@]}
+do
+  [[ -n "${!opt}" ]] && printf -v "${opt}" "\x2D%s '%s'" "${opt}" "${!opt}"
+  echo ${!opt}
+done
+
+# Nasty, I know. Builds command-line for defined options
+eval urxvt $(eval echo $(for opt in ${opts[@]}; do echo \""\$$opt"\"; done)) \
+      -e bash --rcfile "$script" # &>/dev/null &
