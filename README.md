@@ -32,6 +32,14 @@ object store (http://evadeflow.com/2011/01/visualizing-git-object-graphs)
 seadate is a small script that will decode the manufacturing date code
 used on Seagate hard drives.
 
+jterm is a script to open a terminal window with a themed appearance and
+to optionally execute a command within, plus provide user with command to
+take a screenshot of it.
+
+jshot is a script to take a screenshot. It adds a "border" to the window
+by laying the window over a crop of the background image (wallpaper) that
+is slightly larger then the window being captured.
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
@@ -41,7 +49,7 @@ purposes and are preserved here in case they become useful again.
 LICENSE
 -------
 
-Copyright (c) 2013 John Lane
+Copyright (c) 2013-2015 John Lane
 
 MIT License
 
@@ -64,6 +72,6 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-http://www.opensource.org/licenses/mit-license.php
+http://opensource.org/licenses/MIT
 
 

@@ -1,0 +1,184 @@
+#!/bin/bash
+#
+# Open a terminal suitable for use as
+# a screen shot in documentation, etc.
+#
+#                           JL 20150702
+
+myname=$(basename $0)
+
+license() {
+cat <<-EOF
+	Copyright (c) 2015 John Lane
+	
+	MIT License
+	
+	Permission is hereby granted, free of charge, to any person obtaining
+	a copy of this software and associated documentation files (the
+	"Software"), to deal in the Software without restriction, including
+	without limitation the rights to use, copy, modify, merge, publish,
+	distribute, sublicense, and/or sell copies of the Software, and to
+	permit persons to whom the Software is furnished to do so, subject to
+	the following conditions:
+	
+	The above copyright notice and this permission notice shall be
+	included in all copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+	MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+	LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+	OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	
+	http://www.opensource.org/licenses/mit-license.php
+	EOF
+exit
+}
+
+help() {
+cat <<-EOF
+
+
+	${myname}: John's Screenshot Tool
+
+	Takes a screenshot of a window and adds a border made from the 
+	background image (wallpaper).
+
+	    -h              Display this help screen
+	    -L              Display the license and copyright notices
+	    -b              Border size in pixels (defaults to ${border}).
+	    -r              Border radius in pixels (defaults to ${radius}).
+	    -w              Wallpaper image file  (defaults to '${wallpaper}')
+	    -R              Use root backgdound   (same as '-w root)')
+	    -o              Output image file     (defaults to '/tmp/${myname}.${format}')
+	    -f              Output image format   (defaults to '${format}')
+	    -i              Embed id message in image ("jshot <datetime>")
+	    -m              Embed message in image
+	    -O              Offset for embedded message (defaults to '${message_offset}')
+	    -d              Display output image
+
+	The -w (wallpaper) option can be 'root' the current root window background will
+	be used. The -R option is shorthand for '-w root;.
+
+	The -i, -m and -O options can be used to embed a steganographic message in the
+	screenshot. How well this works depends on the length of the message and the 
+	size of the screenshot. It doesn't work well with large messages and small
+	screenshots. YMMV. Use with caution!
+
+	Support
+
+	  Please raise any issues at http://github.com/johnlane/random-toolbox
+
+	License
+
+	  MIT License. Please do "${myname} -L" to display the full license text.
+
+EOF
+exit
+}
+
+abort() { echo $*; exit 1; }
+
+# Defaults
+border=25 # pixels
+radius=0 # pixels
+format=png
+screenshot_command="xwd -frame > ${xwdfile}"
+viewer_command="feh"
+wallpaper=$(ls /usr/share/{backgrounds,wallpaper}/default 2> /dev/null | head -1)
+message_offset=$(( ( RANDOM % 10 )  + 1 )) # a random between 1 and 10
+
+# Required commands
+required_commands=(xwd convert mogrify ${screenshot_command%% *})
+
+# Options
+while getopts "hLb:r:Rw:o:f:dim:O:" opt
+do
+  case "${opt}" in
+    h) help                                 ;;
+    L) license                              ;;
+    b) border=${OPTARG}                     ;;
+    r) radius=${OPTARG}                     ;;
+    R) wallpaper=root                       ;;
+    w) wallpaper=${OPTARG}                  ;;
+    o) outfile="${OPTARG}"                  ;;
+    f) format=${OPTARG}                     ;;
+    d) display=1
+       required_commands+=(${viewer_command%% *}) ;;
+    i) message="jshot $(date '+%Y%m%d%H%M%S')"  ;;
+    m) message="${OPTARG}"                  ;;
+    O) message_offset=${OPTARG}             ;;
+  esac
+done
+shift $((OPTIND-1)) # Shift off the options and optional --
+
+# Ensure we have required commands
+for cmd in ${required_commands[@]}
+do
+  which "${cmd}" &> /dev/null || abort "Cannot find '${cmd}' command"
+done
+
+# set output file if not given
+# not done earlier in case format argument given
+: ${outfile:=/tmp/${myname}.${format}}
+
+# optionally use root background as wallpaper
+if [[ "${wallpaper}" == root ]]
+then
+  which getbg &> /dev/null
+  if [[ $? == 0 ]]
+  then
+    rootbg=$(mktemp)
+    getbg ${rootbg}
+    wallpaper=${rootbg}
+  else
+    abort "Cannot get root background"
+  fi
+fi
+
+# make sure wallpaper is a viable image
+$(identify -ping "${wallpaper}" &> /dev/null) || abort "'${wallpaper}' is not an image!"
+
+# take the screen shot
+xwdfile=$(mktemp)
+xwd -frame > ${xwdfile}
+
+dims=$(identify -format "%wx%h" ${xwdfile})
+w=${dims%x*}  # before the space is %w
+h=${dims##*x} # after the space is %h
+w=$(( w+border))
+h=$(( h+border))
+
+# compose image from screenshot and wallpaper
+convert ${wallpaper} ${xwdfile} -gravity center -crop "${w}x${h}+0+0" -compose over -composite -density 300 +repage ${format}:${outfile}
+
+# Apply rounded corners if radius given
+# http://stackoverflow.com/a/1916256
+# Doesnt work with jpg format
+if [[ ${radius} > 0 ]]
+then
+  mask=$(mktemp)
+  convert -size "${w}x${h}" canvas:none -draw "roundrectangle 0,0,${w},${h},${radius},${radius}" ${format}:${mask}
+  [[ ${format} =~ (png|gif) ]] || mogrify ${format}:${mask} -background white -flatten
+  convert ${outfile} -matte ${mask} -compose DstIn -composite ${outfile}
+  rm "${mask}"
+fi
+
+# Embed message
+if [[ -n "${message}" ]]
+then
+  msg=$(mktemp)
+  convert label:"${message}" ${format}:${msg}
+  composite ${msg} ${outfile} -stegano +${message_offset} ${outfile}
+  echo "Embedded message '${message}' at ${message_offset} pixels."
+  echo "Reveal with 'display -size $(identify -format "%wx%h+${message_offset}" "${msg}") stegano:${outfile}'"
+  rm "${msg}"
+fi
+
+# Display the final image if requested
+[[ -n "${display}" ]] && feh ${outfile}
+
+# Clean up
+rm ${xwdfile} ${rootbg}
