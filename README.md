@@ -43,6 +43,9 @@ is slightly larger then the window being captured.
 make_mediatomb_icons is a Makefile that will download source SVG files
 and generate icons suitable for use with MediaTomb (http://mediatomb.cc)
 
+detach is a script wrapper for reptyr with tmux/screen/dtach to simplify
+detaching processes from the current terminal.
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 

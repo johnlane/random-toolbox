@@ -1,0 +1,330 @@
+#!/bin/bash
+#
+# Detacher - detach a process and move it into a tmux/screen session.
+#
+#                                                 JL 20150710
+
+myname=$(basename $0)
+
+license() {
+cat <<-EOF
+	Copyright (c) 2015 John Lane
+	
+	MIT License
+	
+	Permission is hereby granted, free of charge, to any person obtaining
+	a copy of this software and associated documentation files (the
+	"Software"), to deal in the Software without restriction, including
+	without limitation the rights to use, copy, modify, merge, publish,
+	distribute, sublicense, and/or sell copies of the Software, and to
+	permit persons to whom the Software is furnished to do so, subject to
+	the following conditions:
+	
+	The above copyright notice and this permission notice shall be
+	included in all copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+	MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+	LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+	OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	
+	http://www.opensource.org/licenses/mit-license.php
+	EOF
+exit
+}
+
+help() {
+cat <<-EOF
+
+
+	${myname}: Detach processes from current terminal and move them into 
+	           a terminal multiplexer, either tmux or screen.
+
+	Takes a screenshot of a window and adds a border made from the 
+	background image (wallpaper).
+
+	    -h   Display this help screen
+	    -L   Display the license and copyright notices
+	    -m   Terminal multiplexer (tmux, screen or dtach, defaults to ${mux}).
+	    -s   Session (defaults to a new session).
+	    -t   Target in "session:window" format (alternative to -s and -w)
+	    -w   Window  (defaults to the current window in the session)
+	    -P   PID mode used to select movable pid :pid, ppid, pgrp (defaults to ${pid_mode})
+	    -S   Split mode (h)orizontal, (v)ertical or (w)indow (defaults to ${split_mode})
+	    -T   Use "TTY Stealing" to move the terminal regardless of process selected"
+
+	Multiple PIDS may be given, either as a numeric PID or as a bash jobspec.
+
+	The -P (pid mode) describes how to select the PID to move based on the
+	given PID.
+
+	The -S (split mode) describes how to split the target terminal when there
+	are multiple PIDs. The first PID is placed in the selected window wich is
+	then split before adding the next PID. A split mode of (n)none disables
+	splitting, in which case all PIDS are moved into the same terminal.
+
+	The -T (TTY Stealing) option enables TTY Stealing. This is required if the PID
+	being moved is in a process group containing more than one process. To help
+	avoid unexpected behaviour, only one PID is accepted with -T is given. This
+	option is applied automatically when detaching the current shell (i.e. when
+	called without supplying any PIDS).
+
+	Note that PIDS run in the foreground when moved and the effect of moving
+	multiple PIDS to the same terminal may not be what you expect.
+
+	The -m option selects the multiplexer that the detached process is moved
+	into. This defaults to "tmux" if not otherwise defaulted. If the name that
+	detacher is invoked a is "tmuxr", "screenr", or "dtachr" then the default
+	multiplexer is derived from that by removing the training 'r' (the use of
+	'r' like this is in acknowledgement of 'reptyr' without which this script
+	would have no purpose).                  For example "ln -s detach dtachr"
+
+	Using dtach works well when all that is required is a way to quickly detach 
+	a process. Otherwise tmux is recommended over screen because window detection
+	and selection is more reliable.
+
+	Support
+
+	  Please raise any issues at http://github.com/johnlane/random-toolbox
+
+	License
+
+	  MIT License. Please do "${myname} -L" to display the full license text.
+
+EOF
+exit
+}
+
+abort() { echo $*; exit 1; }
+debug() { [[ -n "$debug" ]] && echo $@; }
+debug "I am $myname and my PID is $$"
+
+# Defaults
+[[ "${myname::-1}" == "dtach"   ]] && mux=dtach
+[[ "${myname::-1}" == "tmux"    ]] && mux=tmux
+[[ "${myname::-1}" == "screen"  ]] && mux=screen
+: ${mux:=tmux}
+split_mode=w
+pid_select_mode=pgrp
+
+# Required commands
+required_commands=(sysctl reptyr "$mux")
+
+# Ensure we have required commands
+for cmd in ${required_commands[@]}
+do
+  which "${cmd}" &> /dev/null || abort "Cannot find '${cmd}' command"
+done
+
+# Options
+while getopts "dhLm:s:w:p:P:S:T" opt
+do
+  case "${opt}" in
+    d) debug=y                             ;;
+    h) help                                ;;
+    L) license                             ;;
+    m) mux=${OPTARG}                       ;;
+    s) session=${OPTARG}                   ;;
+    w) window=${OPTARG}                    ;;
+    p) pane=${OPTARG}                      ;;
+    P) pid_mode=${OPTARG}                  ;;
+    S) split_mode=${OPTARG}                ;;
+    T) steal_tty=y                         ;;
+    v) split=v                             ;;
+  esac
+done
+shift $((OPTIND-1)) # Shift off the options and optional --
+
+# Validate arguments
+[[ (-n "$steal_tty") && ($# > 1) ]] && abort "Only one PID can be given with '-T'"
+
+
+# Ensure we have required rights
+ptrace=$(sysctl -n kernel.yama.ptrace_scope)
+cap=$(getcap $(which reptyr) | grep cap_sys_ptrace | awk -F '+' '{print $2}')
+[[ ("$cap" != "eip") && ($ptrace > 0) ]] && abort "Unauthorised:" \
+                                                  " $(sysctl kernel.yama.ptrace_scope)" \
+                                                  " cap_sys_ptrace=$cap"
+
+function has_session() {
+  [[ -n "$session" ]] && {
+    case $mux in
+      tmux) tmux list-sessions | awk -F ':' '{print $1}' | grep -q "^$session$" ;;
+      screen) screen -ls | grep -q "^\s[0-9]*\.$session\s" ;;
+      dtach)  true ;; # assume session exists - we'll create it later...
+    esac || abort "No session: '$session'" 
+  }
+}
+
+function has_window() {
+  has_session && [[ -n "$window" ]] && case $mux in
+    tmux)   tmux list-windows -t "$session" -F '#{window_name}' | grep -q "^$window$" || \
+            abort "No window '$window' in session '$session'"
+            ;;
+    screen) screen -S "$session" -Q "select" "$window" || \
+            abort "No window '$window' in session '$session'" # side-effect: selects window
+            ;;
+    dtach)  true ;; # we have a session therefore we have its only window!
+  esac
+}
+
+function new_session() {
+  session="$1"
+  case $mux in
+    tmux)   tmux new -d -s "${session}" ;;
+    screen) screen -d -m -S "${session}" ;;
+    dtach)  true ;; # session is created as part of send_command
+  esac
+  has_session # sanity check
+}
+
+function get_current_window() {
+debug "Window was $window"
+  case $mux in
+    tmux)
+      window=$(tmux list-windows -t "$session" -F '#{window_name} #{window_active}' | grep " 1$")
+      window=${window::-2} # delete trailing " 1" that was used to identify the active window
+      ;;
+    screen)
+      # should be able to do "screen -S "$session" -Q windows" here but it doesn't work
+      window="${window:-0}" ;; # fall back to 0 because that should exist ;)
+    dtach)
+      window="0" ;; # there is only one window in dtach and it doesn't have a name!
+  esac
+debug "Window is now $window"
+}
+
+function add_window() {
+  window="${window%_[0-9]*}_$(((window_count++)))"
+  echo $window >> /tmp/windowlist
+  debug "Adding window $window"
+  has_session && case $mux in
+    tmux)   tmux new-window -t "$session" -n "$window"  && get_current_window ;;
+    screen) screen -S "$session" -X screen -t "$window" && get_current_window ;;
+    dtach) ;; # there is only one window; there is nothing to do
+  esac
+}
+
+function add_pane() {
+  case $mux in
+    tmux) debug "adding pane to $session:$window"
+          has_window
+          [[ "$split_mode" == 'h' ]] && split_arg='-h'
+          tmux split-window -t "$session:$window" "$split_arg"
+          ;;
+    screen|dtach) add-window ;; # screen and dtach do not support panes
+  esac
+}
+
+function send_command() {
+  debug "sending command to $window: $@"
+  case $mux in
+    tmux)   tmux send-key -t "$session:$window" "$@" ""     ;;
+    screen) screen -S "$session" -p "$window" -X stuff "$@" ;;
+    dtach)  dtach -n "$session:$window" $@                    ;;
+  esac
+}
+
+# Splits the mux to add a terminal
+# By either adding a (w)indow or, if supported,
+# by splittng the current window into panes, either (h)orizontal or (v)ertical.
+function split() {
+  case "$split_mode" in
+    w)   add_window ;;
+    h|v) add_pane   ;;
+    n)   ;;
+    *)   abort "Unexpected split mode: $split_mode"
+  esac
+}
+
+# Injects text to the parent terminal's input buffer
+function inject() {
+  perl -e 'ioctl(STDIN, 0x5412, $_) for split "", join " ", @ARGV' "$@" ""
+}
+
+function pid_has_children() {
+  # pgrep -P $1 &> /dev/null
+  ps --ppid $1 > /dev/null
+}
+
+function pid_sole_group_member() {
+  [[ $(pgrep -g $1 | wc -l) == 1 ]]
+}
+
+function pgrp() {
+  ps --no-header -o pgrp -p $1
+}
+
+function ppid() {
+  ps --no-header -o ppid -p $1
+}
+
+# Filter out PIDS that should not be moved
+# e.g. ones that aren't owned by the current user
+# PID select mode allows process group to be selected instead of given pid
+# (but note that reptyr is incapable of moving a group with >1 process)
+function filter_permitted_pids() {
+  pids=( $(ps --no-headers -o "${pid_select_mode}",user -p "${pids[@]}" |\
+           grep $(id -un) | awk '{print $1}') )
+  [[ "${#pids[@]}" > 0 ]] || abort "No valid PIDs"
+}
+
+# Move PID
+# Note reptyr cannot move groups with >1 process
+# Work-around is to use "Terminal Stealing" -T option which moves the whole
+# terminal session. That may not be what you want!
+function move_pid() {
+  debug moving $1 into window $window
+  # pid_sole_group_member $1 && unset steal_tty_arg || steal_tty_arg="-T" # force -T when needed
+  if [[ -n "$steal_tty" ]]
+  then
+    steal_tty_arg="-T"
+  else
+    pid_sole_group_member $1 || abort "PID part of group: -T required to move"  # abort if -T needed
+  fi
+  send_command "reptyr "${steal_tty_arg}" $1"
+}
+
+# Collect PIDS and jobspecs from argument list
+# (jobspec: http://www.gnu.org/software/bash/manual/bashref.html#Job-Control)
+for arg in "$@"
+do
+  [[ "${arg::1}" == "%" ]] && jobspecs+=("$arg") || pids+=("$arg")
+done
+
+# If there are any jobspecs then inject the parent shell with command to
+# restart this script with the jobspecs replaced and, unless -T is given,
+# disown the jobspecs
+if [[ "${#jobspecs[@]}" > 0 ]] 
+then
+  args=" -m '$mux' -S '$split_mode'"
+  [[ -n "$session" ]]   && args+=" -s '$session'"
+  [[ -n "$window" ]]    && args+=" -w '$window'"
+  [[ -n "$steal_tty" ]] && args+=" -T" || disown_jobs="'&&' disown ${jobspecs[@]} &>/dev/null"
+  inject "$0" $args "${pids[@]}" '$(jobs -p' "${jobspecs[@]}"')' ${disown_jobs}
+  exit
+fi
+
+# Parent PID if no PIDs given
+[[ ${#pids[@]} == 0 ]] && pids=($PPID)
+
+filter_permitted_pids
+has_session || new_session "${myname}_$$_${mux}"
+has_window || get_current_window
+
+debug "Session: $session"
+debug "Window: $window"
+
+# move the pids; becomes foreground process on target terminal.
+# split the target terminal if there is more than one pid.
+for (( i=0; i < "${#pids[@]}"; i++ ))
+do
+  [[ $i > 0 ]] && split
+  move_pid "${pids[i]}"
+  echo "$session:$window : PID ${pids[i]} ($(ps -h -o args -p ${pids[i]}))"
+done
+
+# http://www.jerri.de/blog/archives/2006/05/02/scripting_screen_for_fun_and_profit/
