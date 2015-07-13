@@ -40,6 +40,9 @@ jshot is a script to take a screenshot. It adds a "border" to the window
 by laying the window over a crop of the background image (wallpaper) that
 is slightly larger then the window being captured.
 
+make_mediatomb_icons is a Makefile that will download source SVG files
+and generate icons suitable for use with MediaTomb (http://mediatomb.cc)
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 

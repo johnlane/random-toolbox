@@ -26,10 +26,10 @@
 ########################################################## JL 20150501 ####
 
 IMAGES = https://upload.wikimedia.org/wikipedia/commons/d/dc/Film_Reel.svg \
-	 https://upload.wikimedia.org/wikipedia/commons/3/3a/Mplayer.svg \
-	 https://upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg \
+         https://upload.wikimedia.org/wikipedia/commons/3/3a/Mplayer.svg \
+         https://upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg \
          https://upload.wikimedia.org/wikipedia/en/c/cb/Raspberry_Pi_Logo.svg \
-	 https://upload.wikimedia.org/wikipedia/commons/b/b1/Cubie_logo.svg
+         https://upload.wikimedia.org/wikipedia/commons/b/b1/Cubie_logo.svg
 
 SIZES = 32 48 120
 FORMATS = bmp png jpg
@@ -75,7 +75,7 @@ clean :
                  $(foreach size, $(SIZES),\
                    $(foreach format, $(FORMATS),\
                      $(image)/mt-icon$(size).$(format)\
-		   )\
+                   )\
                  )\
                )
 
