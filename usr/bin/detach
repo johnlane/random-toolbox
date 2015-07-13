@@ -326,5 +326,3 @@ do
   move_pid "${pids[i]}"
   echo "$session:$window : PID ${pids[i]} ($(ps -h -o args -p ${pids[i]}))"
 done
-
-# http://www.jerri.de/blog/archives/2006/05/02/scripting_screen_for_fun_and_profit/
