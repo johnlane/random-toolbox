@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+# Starts an interactive instance of "bash" that can have input injected by
+# writing to file descriptor 9.
+#
+# Origin  : http://unix.stackexchange.com/a/213805
+# See also: http://unix.stackexchange.com/questions/179030
+#
+# bash-injectable───sh───sh───bash
+#
+# This is just an example that gathers all of the required parts together.
+#
+#                                                        JL 20150714
+#
+# An attempt at explaining what it does
+#
+# sh -cm         = start shell (sh) -m = run in own process group
+#                                   -c = run following command
+# '              = beginning of the command to execute in sh
+# cat<&9 &       = send fd9 to standard output. Backgrounded.
+# cat >&9|(      = send standard input to fd 9. Piped to subshell#1 (sh):
+# trap           = perform following command when EXIT signal received
+#   "            = beginning of command block to execute when signal trapped
+#   stty         = set terminal attributes to subshell#2 output
+#     subshell#2 = stty -g     = output terminal attributes (saves them)
+#                = stty -echo raw = disables echo and enables raw mode
+#   kill -1 0    = send a -HUP to host pgrp
+#   "            = end of command block executed when signal trapped
+#   EXIT         = the signal to trap. When subshell#1 exits, reset tty and kill pgrp
+# <>"$(./pts <&9)" = set subshell#1 stdin to pts for fd9
+# >&0              # set subshell#1 stdout to stdin (i.e. also the pts)
+# 2>&1             # set subshell#1 stderr to stdout (i.e. also to the pts)
+# setsid -wc     = start new session: execute following commadn (-c) and wait for it (-w)
+# --             = end of arguments to setsid
+# bash           = command executed inside subshell (runs an interactive bash shell)
+# )              = end of subshell#1
+#'               # end of sh command
+# --             # end of arguments to sh
+# 9<>/dev/ptmx   = get ptm as fd 9 for sh command
+# 2>/dev/null    = redirect sh command stderr to /dev/null
+#
+
+# build the 'pts' executable if it isn't already on the path
+[[ -x $(which $pts &> /dev/null) ]] && pts=pts || {
+pts=/tmp/pts
+<<\C cc -xc - -o ${pts:=$(mktemp)}
+#include <stdio.h>
+int main(int argc, char *argv[]) {
+  if(unlockpt(0)) return 2;
+  char *ptsname(int fd);
+  printf("%s\n",ptsname(0));
+  return argc - 1;
+  }
+C
+}
+export pts
+
+# function can be used in the enclosed bash to inject commands to itself
+inject() { echo "$*" >&9; }; export -f inject
+
+# the clever part
+sh -cm 'cat <&9 &cat >&9|(             ### copy to/from host/slave
+        trap "  stty $(stty -g         ### save/restore stty settings on exit
+                stty -echo raw)        ### host: no echo and raw-mode
+                kill -1 0" EXIT        ### send a -HUP to host pgrp on EXIT
+        <>"$($pts <&9)" >&0 2>&1\
+        setsid -wc -- bash) <&1        ### point bash <0,1,2> at slave and setsid bash
+' --    9<>/dev/ptmx 2>/dev/null       ### open pty master on <>9

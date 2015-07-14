@@ -52,6 +52,10 @@ for shells, databases and other applications.
 ad-hoc - the scripts in this directory were written for specific ad-hoc
 purposes and are preserved here in case they become useful again.
 
+examples - the files in this directory were written as examples or as
+learning aids. They may have uses as they are but they're included here
+as a source of information for other work / problem solving.
+
 LICENSE
 -------
 
