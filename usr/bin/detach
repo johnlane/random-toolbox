@@ -308,8 +308,8 @@ then
   exit
 fi
 
-# Parent PID if no PIDs given
-[[ ${#pids[@]} == 0 ]] && pids=($PPID)
+# Parent PID if no PIDs given, and steal the TTY in this specific case
+[[ ${#pids[@]} == 0 ]] && pids=($PPID) && steal_tty=y
 
 filter_permitted_pids
 has_session || new_session "${myname}_$$_${mux}"
