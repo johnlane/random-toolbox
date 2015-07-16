@@ -102,9 +102,13 @@ theme() {
       fi
       ;;
 
-    blue)
+    dark-blue)
       background="Midnight Blue"
       foreground="Light Steel Blue"
+      ;;
+    light-blue)
+      background="Light Steel Blue"
+      foreground="Midnight Blue"
       ;;
     red)
       background="Dark Salmon"
@@ -136,7 +140,7 @@ theme() {
 
 # Default theme
 theme default
-theme blue
+theme dark-blue
 
 # Options
 while getopts "hLc:st:p:f:F:b:g:T:o:v" opt
@@ -186,8 +190,6 @@ PS1="[\u@$prompt]$ "
 
 # Self-destruct
 rm $script
-
-echo \$#
 
 # Run optional command
 if [[ -n "$command" ]]
