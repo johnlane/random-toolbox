@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# AUR 3/4/ downloader JL 20150716
+#
+# Usage:  getaur [-3|-4] package
+
+# optional first argument to select aur version 3 (-3) or 4 (-4)
+# defaults to version 4 if not given.
+[[ "${1:0:1}" == "-" ]] && { aur="${1:1}"; shift; } || aur=4
+
+case "${aur}" in
+
+  3) dir1=${1:0:2}
+     dir2=$1
+     file=$1.tar.gz
+     url=https://aur.archlinux.org/packages/$dir1/$dir2/$file
+
+     echo "Downloading '$1' from AUR version 3" 
+     curl "$url" | tar zxf -
+     ;;
+
+  4) echo "Downloading '$1' from AUR version 4"
+     git clone https://aur4.archlinux.org/$1
+     ;;
+
+  *) echo "Bad argument: '${aur}'"
+     exit -1
+
+esac
