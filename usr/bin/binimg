@@ -1,0 +1,75 @@
+#!/usr/bin/ruby
+#
+# Produce a visual representation of binary data
+# as an aid to visualise its entropy
+# JL20150718
+
+require 'tempfile'
+
+IMAGE_FORMAT = 'png'
+
+# Number of bytes per pixel (e.g. 3 for RGB or 1 for greyscale)
+PIXEL_SIZE = 3
+
+X = 1920
+
+ASPECT_X = 16
+ASPECT_Y = 9
+Y = X / ASPECT_X * ASPECT_Y
+
+# Print a dot after for each block of this many bytes is written
+DOT_PERIOD = 1024*512
+puts "Each '.' represents #{DOT_PERIOD} bytes of image data" if DOT_PERIOD > 0
+
+def scan(data_file)
+
+  puts "Generating #{IMAGE_FORMAT.upcase} image from #{data_file}"
+
+  # Data size
+  data_size=File.stat(data_file).size
+  puts "data set (#{data_file}) is #{data_size} bytes."
+
+  # Image size
+  if ( data_size / PIXEL_SIZE) < (X * Y)
+    x = Math.sqrt( ASPECT_X * data_size / PIXEL_SIZE / ASPECT_Y )
+    y = x / ASPECT_X * ASPECT_Y
+    x = x.round
+    y = y.round
+  else
+    x,y = X,Y
+  end
+  image_size = x * y
+  puts "image size #{x}x#{y} is #{image_size} pixels (#{ASPECT_X}:#{ASPECT_Y} aspect ratio)."
+
+  # Data resolution (the number of data bytes per pixel)
+  data_resolution = data_size / image_size
+  puts "data resolution = #{data_resolution} bytes"
+
+  base = File.basename(data_file, '.*')
+  image_file= base+'.'+IMAGE_FORMAT
+  temp_file= base+'.rgb'
+
+  count=0
+  Tempfile.open([base,'.rgb']) do |image|
+    image.binmode
+    File.open(data_file, 'rb') do |data|
+      while (pixel_bytes = data.read(PIXEL_SIZE))
+        data.seek(data_resolution - PIXEL_SIZE,:CUR)
+        break if count >= image_size
+        image.write(pixel_bytes)
+        count+=1
+        if ((DOT_PERIOD >0) && (count % DOT_PERIOD == 0 ))
+          print '.'
+          STDOUT.flush
+        end
+      end
+      data.close
+    end
+    puts "\nGenerating image in #{image_file} from #{count} bytes"
+    image.close
+    %x(convert -size #{x}x#{y} -depth 8 #{image.path} #{image_file})
+  end
+
+end
+
+ARGV.each { |a| scan a }
