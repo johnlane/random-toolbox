@@ -1,0 +1,20 @@
+# Example YAY data file
+#
+root_key1: this is value one
+root_key2: "this is value two"
+
+drink:
+  state: liquid
+  coffee:
+    best_served: hot
+    colour: brown
+  orange_juice:
+    best_served: cold
+    colour: orange
+
+food:
+  state: solid
+  apple_pie:
+    best_served: warm
+
+root_key_3: this is value three
