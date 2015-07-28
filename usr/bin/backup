@@ -28,6 +28,9 @@
 # Command Line
 COMMAND_LINE="$0 $*"
 
+# This host
+THIS_HOST=$(hostname -f)
+
 # Backup host
 BACKUP_HOST=$1
 shift
@@ -45,6 +48,12 @@ BACKUP_DIRS="$*"
 PING=/sbin/ping
 BASH=/bin/bash
 RSYNC=/usr/bin/rsync
+TIME=/usr/bin/time
+TOUCH=/usr/bin/touch
+[[ $(uname -s) == Darwin ]] && CAFFEINATE='/usr/bin/caffeinate -i'
+
+# Breadcrumb confirming this job ran
+${TOUCH} backup-job-last-run
 
 # Is there a job already running
 JOBS=$(sh -c "ps axo pid,command | grep \"${COMMAND_LINE}\" | grep -v grep | grep -v $$")
@@ -62,12 +71,17 @@ else
         echo "Backup host ${BACKUP_HOST} is up"
 
         # RSYNC service to which we will back up
-        BACKUP_SERVICE="${BACKUP_HOST}::${USER}"
+        #BACKUP_SERVICE="${BACKUP_HOST}::${USER}"
+        #BACKUP_SERVICE="${BACKUP_HOST}::${USER}/${THIS_HOST}"
+        BACKUP_SERVICE="${USER}@${BACKUP_HOST}:"
 
         echo "Starting backup to ${BACKUP_SERVICE} at $(date)"
         echo "Backing up: ${BACKUP_DIRS}"
 
-        time ${RSYNC} -av --delete ${BACKUP_DIRS} ${BACKUP_SERVICE}
+        # Breadcrumb confirming this job ran
+        ${TOUCH} backup-job-last-rsync
+
+        ${CAFFEINATE} ${TIME} ${RSYNC} -aHv --delete ${BACKUP_DIRS} ${BACKUP_SERVICE}
 
         echo # blank line
         echo "Backup completed at $(date)"
