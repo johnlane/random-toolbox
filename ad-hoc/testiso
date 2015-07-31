@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# Test ISO - just some small tests on an ISO to see what's written
+# to an otherwise empty filesystem
+#
+# Optional command-line arguments:
+#          specify -u as first argument to generate a UDF image
+#          specify image filename (or let it be defaulted).
+#
+# JL20150731
+
+# Note UDF has a varaible serial number that causes hashes of subsequent
+# runs to fail. Images without UDF are identical and produce the same hash.
+
+# Give -u option to enable UDF (this option passed to mkisofs)
+[[ "$1" == "-u" ]] && { declare -r UDF="-udf"; shift; }
+
+declare -r SECTOR_SIZE=2048
+declare -r START_SECTOR=16
+declare -r IMG=${1:-$(basename $0).iso}
+declare -r MAX_ED=5 #max number of ED sectors to search
+declare -r HASH=sha256
+
+# byte to ascii hex - surely there has to be a better way?
+bytehex() { printf "%b" "${1:-\000}" | od -t x1 | { read offset hex; echo $hex; }; }
+
+# blank config
+( for s in APPI COPY ABST BIBL PREP PUBL SYSI VOLI VOLS
+  do
+    echo -e "$s=${!s}"
+  done
+) > .mkisofsrc
+
+# make an empty test iso with a fake timestamp
+TZ=UTC faketime -f "1970-01-01 00:00:00" mkisofs -quiet -r -J $UDF -o $IMG /dev/null
+
+# display header
+isoinfo -d -i $IMG
+
+# traverse volume descriptors
+echo -n "Volume descriptors"
+for ((vd_type='' sector=$START_SECTOR;vd_type!="FF";sector+=1))
+do
+  vd_type=$(bytehex $(dd if=$IMG skip=$((sector*SECTOR_SIZE)) bs=1 count=1 2>/dev/null))
+  echo -n " $vd_type"
+done
+
+# and extended descriptors
+for ((ed=0; ed<$MAX_ED; ed++))
+do
+  byte_offset=$(((sector+ed)*SECTOR_SIZE))
+  id=$(dd if=$IMG skip=$byte_offset bs=1 count=4 2>/dev/null)
+  echo -n " $id"
+  if [[ "$id" == "MKI " ]]
+  then
+    echo "wiping next 100 bytes to erase creation time"
+    dd if=/dev/zero of=$IMG conv=notrunc seek=$((byte_offset+4)) bs=1 count=100 2>/dev/null
+    break
+  fi
+done
+
+# display image size, hash and name
+stat --printf="%s bytes; $HASH:" $IMG; ${HASH}sum $IMG
