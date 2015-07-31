@@ -4,20 +4,37 @@
 # to an otherwise empty filesystem
 #
 # Optional command-line arguments:
-#          specify -u as first argument to generate a UDF image
-#          specify image filename (or let it be defaulted).
+#          -u as first argument to generate a UDF image
+# and then, in any order:
+#          image filename   (or defaults to testiso.iso).
+#          source directory (or defaults to null)
+#
+# If given as arguments, the image file must not exist but the directory must.
 #
 # JL20150731
 
 # Note UDF has a varaible serial number that causes hashes of subsequent
-# runs to fail. Images without UDF are identical and produce the same hash.
+# runs to differ. Images without UDF are identical and produce the same hash.
 
 # Give -u option to enable UDF (this option passed to mkisofs)
 [[ "$1" == "-u" ]] && { declare -r UDF="-udf"; shift; }
 
+# Accept arguments - an existing directory and a non-existing file
+# given in any order.
+while (( $# ))
+do
+  arg="$1"; shift
+  [[   -d "$arg" && -z "$DIR" ]] && declare -r DIR="$arg" && continue
+  [[ ! -e "$arg" && -z "$IMG" ]] && declare -r IMG="$arg" && continue
+  echo "Bad argument: $arg"
+  exit 1
+done
+[[ -z "$DIR" ]] && declare -r DIR=/dev/null
+[[ -z "$IMG" ]] && declare -r IMG="$(basename $0).iso"
+echo "Making image '$IMG' from directory '$DIR'"
+
 declare -r SECTOR_SIZE=2048
 declare -r START_SECTOR=16
-declare -r IMG=${1:-$(basename $0).iso}
 declare -r MAX_ED=5 #max number of ED sectors to search
 declare -r HASH=sha256
 
@@ -32,16 +49,16 @@ bytehex() { printf "%b" "${1:-\000}" | od -t x1 | { read offset hex; echo $hex; 
 ) > .mkisofsrc
 
 # make an empty test iso with a fake timestamp
-TZ=UTC faketime -f "1970-01-01 00:00:00" mkisofs -quiet -r -J $UDF -o $IMG /dev/null
+TZ=UTC faketime -f "1970-01-01 00:00:00" mkisofs -quiet -r -J $UDF -o "$IMG" "$DIR"
 
 # display header
-isoinfo -d -i $IMG
+isoinfo -d -i "$IMG"
 
 # traverse volume descriptors
 echo -n "Volume descriptors"
 for ((vd_type='' sector=$START_SECTOR;vd_type!="FF";sector+=1))
 do
-  vd_type=$(bytehex $(dd if=$IMG skip=$((sector*SECTOR_SIZE)) bs=1 count=1 2>/dev/null))
+  vd_type=$(bytehex $(dd if="$IMG" skip=$((sector*SECTOR_SIZE)) bs=1 count=1 2>/dev/null))
   echo -n " $vd_type"
 done
 
@@ -49,15 +66,15 @@ done
 for ((ed=0; ed<$MAX_ED; ed++))
 do
   byte_offset=$(((sector+ed)*SECTOR_SIZE))
-  id=$(dd if=$IMG skip=$byte_offset bs=1 count=4 2>/dev/null)
+  id=$(dd if="$IMG" skip=$byte_offset bs=1 count=4 2>/dev/null)
   echo -n " $id"
   if [[ "$id" == "MKI " ]]
   then
     echo "wiping next 100 bytes to erase creation time"
-    dd if=/dev/zero of=$IMG conv=notrunc seek=$((byte_offset+4)) bs=1 count=100 2>/dev/null
+    dd if=/dev/zero of="$IMG" conv=notrunc seek=$((byte_offset+4)) bs=1 count=100 2>/dev/null
     break
   fi
 done
 
 # display image size, hash and name
-stat --printf="%s bytes; $HASH:" $IMG; ${HASH}sum $IMG
+stat --printf="%s bytes; $HASH:" "$IMG"; ${HASH}sum "$IMG"
