@@ -7,7 +7,6 @@
 # This work by John lane 20160316
 
 require_relative 'rsa'
-require 'primes/utils'
 
 # RSA tester
 # Exercises #key and #cipher
@@ -22,10 +21,23 @@ end
 # Above 16 bits the delay incurred by computing phi is apparent
 # By 22 bits the delay is very obvious. This is what makes cracking
 # RSA a "hard" problem. You don't want to do it for 2048 bits!
-BITS = 20
+BITS = 2048
 LOG=true
 
-1000000.times do
+# Accept command-line arguments and test. Arguments are integers:
+# message
+# public exponent
+# modulus
+#
+# The modulus can be given as one or two numbers, both of which need to be prime
+# These aren't checked, so get them right!
+if ARGV.length > 0
+
+  rsa(*ARGV.map{|i| i.to_i})
+
+else
+
+  1000000.times do
   n=m=g=nil
 
   # Default private exponent (usually, but not necessarily, prime)
@@ -36,7 +48,7 @@ LOG=true
   e=[3,5,17,257,65537].sample
 
   # randomly execute with a random n or random primes [p,q]
-  case random(1..2)
+  case random(2..2)
   when 1
     # choose any value for n but cannot go below 3 because
     # phi(2) is 1 (see assertion in code)
@@ -77,5 +89,7 @@ LOG=true
   args.unshift(m)
 
   rsa(*args)
+
+end
 
 end
