@@ -61,21 +61,28 @@ def phi(*args)
     (args[0]-1)*(args[1]-1)
   when 1
     n = args[0]
+puts n
     (1..n).reduce(0) { |p,i| gcd(n,i)==1 ? p+1 : p }
   else
     nil
   end
 end
 
-# Return a prime number less than n
-require 'prime'
+# Carmichael Function - lambda(p,q)
+def lam(p,q)
+  (p-1).lcm(q-1)
+end
+
+# Return a prime number less than n bits
+require 'openssl'
 def prime(n)
-  p = 0
-  loop do
-    p = random(n)
-    break if p.prime?
+  OpenSSL::BN::generate_prime(n).to_i
+end
+
+class Integer
+  def prime?
+    OpenSSL::BN.new(self).prime?
   end
-  p
 end
 
 # RSA private key generator
@@ -87,7 +94,7 @@ def key(e, *args)
   case args.length
   when 1
     n = args[0]
-    phi = phi(n) # this is the "hard" thing when n is big!
+    t = phi(n) # this is the "hard" thing when n is big!
   when 2
     # p and q must be distinct primes and coprime with e
     args.each { |i| assert i.prime?, coprime(e,i-1) }
@@ -95,7 +102,7 @@ def key(e, *args)
     assert p != q
 
     n = p*q
-    phi = phi(p,q)
+    t = lam(p,q) # use Carmichael Numbers instead of Primes
   else
     raise ArgumentError
   end
@@ -107,22 +114,36 @@ def key(e, *args)
 
   # From Euler's theorem, e and d must be coprime so that:
   # e.d = phi(n)+1 (mod phi(n)) => e.d +k.phi(n) = 1 (Bézout's Identity)
-  assert coprime(e,phi)
+  assert coprime(e,t)
 
   # Because e is coprime to phi(n), the multiplicative inverse of e with
   # respect to phi(n) can be efficiently and quickly determined using the
   # Extended Euclidean Algorithm.  This multiplicative inverse is the private key.
-  a,b = eea(e,phi)               # Extended Euclidean Algorithm (we don't need b
-  assert (a*e)%phi == gcd(e,phi) # Bézout's Identity             except to assert!)
+  a,b = eea(e,t)               # Extended Euclidean Algorithm (we don't need b
+  assert (a*e)%t == gcd(e,t) # Bézout's Identity             except to assert!)
 
   # The private key is the coefficient a (mod phi(n)). We apply mod phi(n) in
   # case a is negative; this returns a positive congruence
-  d = a % phi                           # Private key
-  assert d*e%phi == 1                   # Euler's theorem
-  puts "a:#{a}\t\tb:#{b}\t\td:#{d}\te:#{e}\tphi:#{phi}" if LOG
+  d = a % t                           # Private key
+  assert d*e%t == 1                   # Euler's theorem
+  puts "a:#{a}\t\tb:#{b}\t\td:#{d}\te:#{e}\tt:#{t}" if LOG
 
   [d, n]
 
+end
+
+# Modular exponent
+def powmod(base, exponent, modulus, *)
+  return modulus==1 ? 0 : begin
+    result = 1
+    base = base % modulus
+    while exponent > 0
+      result = result*base%modulus if exponent%2 == 1
+      exponent = exponent >> 1
+      base = base*base%modulus
+    end
+    result
+  end
 end
 
 # RSA cipher function
@@ -131,5 +152,5 @@ def cipher(m, e, n)
   assert coprime(g=gcd(m,n),n/g)
   #above assertion replaces below as per http://crypto.stackexchange.com/questions/33802
   #assert coprime(m,n) # for Euler's theorem so m^phi(n) = 1 (mod phi(n))
-  m**e % n
+  powmod(m,e,n)
 end
