@@ -1,0 +1,11 @@
+#!/bin/bash
+
+repeat=$1; shift
+out="./benchmark-$$"
+echo "$*" > $out
+
+for i in $(seq $repeat)
+do
+  eval "time $* 2>/dev/null" 2>> $out
+done
+echo "written $out"
