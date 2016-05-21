@@ -45,3 +45,10 @@ class Foo
     end
   end
 end
+
+#RVM: show latest version (not install)
+curl https://raw.githubusercontent.com/rvm/rvm/master/VERSION
+
+#RVM: update
+rvm get head
+
