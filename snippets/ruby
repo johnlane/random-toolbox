@@ -31,3 +31,17 @@ $ irb
 $ require 'syncftp'
 $ Gem.loaded_specs["syncftp"].version
 => #<Gem::Version "0.0.5.1">
+
+# Implement keyword arguments without keyword arguments
+# (untested aide-memoire)
+class Foo
+  def initialize(**kwargs)
+    kwargs.each do |key, value|
+      send “#{key}=“, value
+      class_exec self.class do
+       define_method key do
+      value
+      end
+    end
+  end
+end

@@ -1,0 +1,10 @@
+GPG Snippets
+============
+
+View key fingerprint of key file (without importing)
+
+    $ gpg --with-fingerprint key.asc
+
+Import public key
+
+    $ gpg --import key.asc
