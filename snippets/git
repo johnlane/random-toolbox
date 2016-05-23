@@ -78,3 +78,6 @@ git show :1:myfile
 git show :2:myfile
 git show :3:myfile
 
+# RawGit serves raw files directly from GitHub
+# with proper Content-Type headers.
+# http://rawgit.com

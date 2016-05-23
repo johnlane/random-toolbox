@@ -8,3 +8,11 @@ View key fingerprint of key file (without importing)
 Import public key
 
     $ gpg --import key.asc
+
+View Photo
+
+    $ gpg --list-options show-photos --fingerprint <key id>
+
+To change the default viewer, use ~/.gnupg/gpg.conf. For example:
+
+    photo-viewer "feh %i"
