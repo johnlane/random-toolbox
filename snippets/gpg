@@ -16,3 +16,8 @@ View Photo
 To change the default viewer, use ~/.gnupg/gpg.conf. For example:
 
     photo-viewer "feh %i"
+
+To convert between binary and ASCII-Armor GnuPG formats:
+
+gpg --enarmor < infile > outfile
+gpg --dearmor < infile > outfile
