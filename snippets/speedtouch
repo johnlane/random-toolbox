@@ -27,3 +27,19 @@ xdsl config adslmultimode=adsl2plus
 
 
 
+http://www.dynode.nl/st_resources/st_resources/
+
+Adding "NAPT" rules
+
+see http://community.plus.net/forum/index.php/topic,130329.msg1135069.html#msg1135069
+
+service host add name="Mail Server"
+service host rule add name="Mail Server" protocol=tcp portrange=25-25
+service host assign name="Mail Server" host=10.0.200.11 log=enabled
+
+Remove them
+
+service host disable name="Mail Server"
+service host delete name="Mail Server"
+
+

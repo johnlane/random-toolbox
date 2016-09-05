@@ -62,7 +62,7 @@ as a source of information for other work / problem solving.
 LICENSE
 -------
 
-Copyright (c) 2013-2015 John Lane
+Copyright (c) 2013-2016 John Lane
 
 MIT License
 

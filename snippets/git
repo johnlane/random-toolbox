@@ -36,7 +36,7 @@ git commit -C HEAD@{1}
 git ls-files --deleted -z | xargs -0 git rm
 
 # Rename current branch
-git branch -n newname
+git branch -m newname
 
 # Rename another branch
 git branch -m oldname newname
@@ -54,6 +54,9 @@ example: git branch -u origin/master
 # See upstream branch
 # http://stackoverflow.com/a/4952368/712506
 git branch -vv
+or
+http://stackoverflow.com/a/26526119
+git checkout
 
 # Delete remote branch
 git push origin :branch-name
@@ -85,6 +88,10 @@ git log -1 -- [file path]
 
 # Show files changed between commit
 git diff --name-status HEAD^
+
+# Side-by-side diff
+# http://stackoverflow.com/a/39225649
+git difftool -y -x sdiff  HEAD^ | less
 
 # Show merge conflct file versions
 # http://www.gitguys.com/topics/merging-with-a-conflict-conflicts-and-resolutions/
@@ -145,3 +152,43 @@ $ gi execute --repo="rails/rails" "SELECT * FROM forks WHERE sort=stargazers,per
 # Find all past names of a file
 git log --name-only --format=format: --follow -- dockbar-gtk2.py | sort -u
 
+# Create a patch from last commit
+# formatted for sending by email
+git format-patch -n HEAD^
+
+# Create a patch containing diffs to another branch, for example
+git format-patch origin/master
+
+# Create a raw patch from last commit
+git show HEAD > my.patch
+#or
+git format-patch HEAD^ --stdout > my.patch
+
+# Create a diffstat for recent commits
+git diff --stat HEAD^ # previous commit
+git diff --stat HEAD~ # previous commit
+git diff --stat HEAD^^ # previous 2 commits
+git diff --stat HEAD~2 # previous 2 commit
+git diff --stat c945ca75 # specific commit
+
+# Email patches from last 4 commits
+# (using -compose opens up an editor to send a covering email; 5 mails sent in total)
+# requires configuration of get-send-email
+# can be useful to include a diffstat (see above) in covering mail
+git send-email -compose -4
+
+# Check a patch (dry run)
+git apply --stat my.patch
+
+# Apply a patch but don't commit
+git apply my.patch
+
+# Apply, commit and sign off a patch
+# https://ariejan.net/2009/10/26/how-to-create-and-apply-a-patch-with-git/
+git am --signoff my.patch
+
+# Find a commits that mention string (e.g. to find when something was removed)
+# http://stackoverflow.com/questions/4404444/how-do-i-blame-a-deleted-line
+# also known as "The Git Pickaxe" (Google it...)
+git log -S <string> path/to/file
+git log -G <regex> path/to/file

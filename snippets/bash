@@ -5,6 +5,14 @@
 # My name
 declare -r MYNAME=$(basename $0)
 
+# skeleton script
+#!/bin/bash
+def main() {
+... your code here ...
+}
+main "$@"
+# end of skeleton script
+
 # Interactive input test
 [[ -t 0 ]] && echo interactive || echo stdin is a pipe or file
 
@@ -92,7 +100,6 @@ rm -rf *
 pdfjoin a.pdf b.pdf # creates b-joined.pdf
 pdfunite a.pdf b.pdf ab.pdf
 
-
 # iterate arguments
 # http://unix.stackexchange.com/questions/258512
 for arg in "$@"   # or just for arg do
@@ -104,9 +111,41 @@ done
 
 printf '%s\n' "$@"
 
-
 # check command exists
 # (preferable solutions instead of using 'which'
 # http://stackoverflow.com/questions/592620
 
 hash foo
+
+# Merge two directory trees
+rsync -av --remove-source-files src/ dest/
+
+# Get last argument (respects whitespace)
+last_arg=${@:${#@}}
+
+# Remove last argument (respects whitespace)
+# http://stackoverflow.com/a/26163980
+set -- "${@:1:$(($#-1))}"
+
+#
+# Function to break QUERY_STRING into array (for use in CGI script)
+# http://stackoverflow.com/a/26338656
+get_query_string() {
+  local q="$QUERY_STRING"
+  local re1='^(\w+=\w+)&?'
+  local re2='^(\w+)=(\w+)$'
+  while [[ $q =~ $re1 ]]; do
+    q=${q##*${BASH_REMATCH[0]}}
+    [[ ${BASH_REMATCH[1]} =~ $re2 ]] && eval "$1+=([${BASH_REMATCH[1]}]=${BASH_REMATCH[2]})"
+  done
+}
+
+# use like this:
+declare -A params
+get_query_string params 
+
+#(see samples in ad-hoc directory)
+
+# Create a temporary filename
+# (for when you can't or don't want to use "mktemp")
+temp="$(basename $0).$$.temp"

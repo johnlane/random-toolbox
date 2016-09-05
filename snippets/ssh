@@ -13,3 +13,8 @@ IdentityFile ~/.ssh/johnlane_rsa
 
 # Install key on remote host
 ssh-copy-id -i ~/.ssh/johnlane_rsa.pub user@host
+
+# Print server's fingerprint on server
+# keys stored in /etc/ssh (e.g. for ECDSA key:)
+# The -E gives MD5 fingerprint; leave off for SHA256
+ssh-keygen -E md5 -lf /etc/ssh/ssh_host_ecdsa_key
