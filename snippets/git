@@ -81,3 +81,13 @@ git show :3:myfile
 # RawGit serves raw files directly from GitHub
 # with proper Content-Type headers.
 # http://rawgit.com
+
+#
+# Stashing
+#
+
+# List
+git stash list
+
+# Stash hunk-by-hunk http://stackoverflow.com/a/17969785
+git stash -p

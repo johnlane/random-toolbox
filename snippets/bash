@@ -2,6 +2,9 @@
 # This file contins snippets for bash
 #
 
+# My name
+declare -r MYNAME=$(basename $0)
+
 # Interactive input test
 [[ -t 0 ]] && echo interactive || echo stdin is a pipe or file
 
