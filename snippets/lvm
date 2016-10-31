@@ -18,3 +18,6 @@ lvextend --size +200G /dev/sodium/public
 # Enlarge ext4 partition on enlarged LVM volume
 # ok to do while mounted
 resize2fs /dev/sodium/public
+
+# Enlarge and resize at once
+lvresize --resizefs --size +100GiB /dev/platters/prod_home
