@@ -1,0 +1,358 @@
+#!/bin/sh
+#
+# Download magazine content from Linux Voice website
+#
+# Download from subscrbers' area if credentials given,
+# otherwise download from the creative commons area.
+#
+# Usage:  get [<subscriber_id> <email>]
+#
+# JL20161101
+
+# Download content for one issue.
+# Issue number is first argument which can be suffixed with
+# a subscriber path. Remaining arguments are filenames.
+# If filnames are unsuffixed then the file extensions to try can be
+# defined by settng FILETYPES to a space-separated string; if this is
+# not set then it defaults to pdf.
+# The SESSION variable must be pre-set to use the subscribers'
+# area. It must contain wget parameters to access a pre-aithenticated
+# session (i.e. present a cookie file with --load-cookies).
+download() (
+
+  issue=${1%%:*} # issue number before colon
+
+  echo "downloading issue $issue"
+
+  # if using subscriber site then use the subscriber path (after
+  # the colon, if given) otherwise just use the issue number.
+  [[ -n "$SESSION" ]] && path=${1#*:} || path=$issue
+  shift
+  mkdir -p $issue
+  cd $issue
+
+  # URL
+  if [[ -n "$SESSION" ]]
+  then
+    URL=https://subs.linuxvoice.com/wp-content/uploads
+  else
+    URL=https://www.linuxvoice.com/issues
+  fi
+
+  # Creative commons articles are only available up to issue 12
+  # (note: cast the zero padded issue number to base-10 number)
+  [[ -n "$SESSION" || ( $((10#$issue)) -le 12 ) ]] && for title in "$@"
+  do
+    for ext in $([[ "$title" = *.* ]] && echo ${title##*.} || echo ${FILETYPES:-pdf})
+    do
+      wget $SESSION --no-clobber --continue "$URL/$path/${title%.*}.$ext"
+    done
+  done
+
+)
+
+# Alternative version for downloading the sample images showing 3 pages
+download_pages() (
+
+  issue=${1%%:*} # issue number before colon
+  path=${1#*:}
+  shift
+  mkdir -p $issue
+  cd $issue
+
+  # URL
+  URL=https://www.linuxvoice.com/wp-content/uploads
+
+  for title in "$@"
+  do
+    for ext in $([[ "$title" = *.* ]] && echo ${title##*.} || echo ${FILETYPES:-pdf})
+    do
+      wget $SESSION --no-clobber --continue "$URL/$path/${title%.*}.$ext"
+    done
+  done
+
+)
+
+# Clean up
+cleanup() {
+  rm -f $COOKIES
+}
+trap cleanup EXIT
+
+sign_in() {
+
+  # Subscriber credentials
+  SUBNUM="$1"
+  EMAIL="$2"
+
+  if [[ -n "$SUBNUM$EMAIL" ]]
+  then
+
+      # Supply the required headers
+      for header in \
+        'Referer: https://subs.linuxvoice.com/wp-login.php?loggedout=true'
+      do
+        HEADERS+=("--header '$header'")
+      done
+
+      # Authenticate and save session cookies
+      COOKIES=$(mktemp)
+
+      wget ${HEADERS[@]} \
+           --keep-session-cookies --save-cookies $COOKIES \
+           --post-data "log=$SUBNUM&pwd=$EMAIL" \
+           -O /dev/null https://subs.linuxvoice.com
+
+      SESSION="--load-cookies $COOKIES"
+  fi
+
+}
+
+sign_out() {
+  unset SESSION
+}
+
+download_pages 001:2014/11 issue1_pages.png
+download_pages 002:2015/01 issue2_pages.png
+download_pages 003:2015/02 issue_3_pages.png
+download_pages 004:2015/02 issue_4_pages.png
+
+for m in {4..10}
+do
+  let i=m+1
+  download_pages $(printf '%03d' $i):2015/$(printf '%02d' $m) issue_${i}_pages.png
+done
+
+download_pages 012:2015/10 issue_12_pages.png
+download_pages 013:2016/01 issue_13_pages.png
+
+download_pages 014:2016/02 lv14_pages.png
+
+for m in {2..5} 7 8 # Issues 15-21 except 19
+do
+  let i=m+13
+  download_pages $(printf '%03d' $i):2016/$(printf '%02d' $m) lv${i}_pages.png
+done
+
+download_pages 019:2016/05 lv29_pages.png # this is issue 19!!!
+
+sign_in "$@"
+
+download 001:2014/02 news2 distro gamin letters lugs fosdem mageia libreoffice \
+                     lightworks freebsd nexus books encryption bestthings \
+                     interview bitcoin story faq sysadmin cloudadmin fosspicks \
+                     pgp brewpi owncloud firefox vim ada arch Dynamic-Web \
+                     euclid bash thankyou random \
+		     lv_cover_lv001.png
+
+download 002:2014/03 02news 02distro 02games 02letters 02lugs 02xps 02retrode \
+                     02krita 02picy 02solydxk 02books 02group 02programming \
+                     02piducation 02munich 02yrs 02faq 02sys 02cloud 02fosspicks \
+                     02bugs 02arcade 02hopper 02kde 02uefi 02drawing 02key \
+                     02kernel 02filezilla 02ssh 02dvd 02random \
+		     LinuxVoice002cover2.png \
+		     LinuxVoice002cover2-212x300.png
+
+download 003:2014/04 LV3news LV3distro LV3games LV3letters LV3lugs2 LV3bitwig \
+                     LV3gnome LV3udoo LV3rouncube LV3pibrella LV3books LV3group \
+                     LV3cli LV3shop LV3fsf LV3opencore LV3Turing LV3faq LV3sys \
+                     LV3cloud LV3foss LV3lxde LV3jacket LV3comet LV3pi LV3libvirt \
+                     LV3ruby LV3cc1 LV3google LV3master LV3random \
+		     LV003-Cover.png LV003-Cover-212x300.png
+
+download 004:issues  lv4-news lv4-distro lv4-games lv4-letters lv4-lugs \
+                     lv4-chromebook lv4-ubuntu lv4-matrix lv4-bitscope lv4-books \
+                     lv4-grouptest lv4-ubuntspins lv4-kano lv4-codeclub lv4-steam \
+                     lv4-iview lv4-faq lv4-coretech lv4-cloudadmin lv4-fosspicks \
+		     lv4-font lv4-robot lv4-pi lv4-server lv4-virtualbox \
+		     lv4-neumann lv4-fpga lv4-ninja lv4-android lv4-masterclass \
+		     lv4-random lv4-cover.png
+
+download 005:2014/06 news6 distro gaming letters hack nethack bugs rpicompute \
+                     mm mediaplayer qiana pyboard ooo xml books rss sysadmin \
+                     core fosspicks bench pigames migrate source basic pyparted \
+                     python3 android master random lv5.png
+
+download 006:issues  new6 distro6 gaming6 letters6 lugs pi6 slack6 kde6 fork6 \
+                     faq6 iview6 centos7 minetest opera Aftershot harmony6 books6 \
+                     cloudadmin coretech6 foss6 krita6 quiz6 tor6 packages6 nerf6 \
+                     sigil6 ninja6 Turing6 Masterclass6 Linux-Voice-Issue-006.png
+
+download 007:issues  8distro 8gaming 8oscon 8best 8bplus 8eos 8faq 8iview 8kde \
+                     8camjam 8math 8lo 8stella 8books 8irc 8coretech 8fosspicks \
+                     8pi-b 8edu 8data 8bash2 8fargo 8usb 8bash 8ninja 8zuse \
+                     8masterclass \
+                     Linux-Voice-Issue-007.png Linux-Voice-Issue-007-212x300.png
+
+download 008:2014/09 news distros games mail lugs distro-build indie space \
+	             gaming-feat diaspora iview wacom goblin calibre energenie \
+		     android books group coretech fosspicks hdr pi backup john \
+		     cyrus urwid xbmc ninja arm ssl random \
+                     lv-cover-008.png lv-cover-008-212x300.png
+
+download 009:2014/10 news distros gaming letters lugs best kernel makers gnome-feat \
+                     faq iview Kobo geary hover gnome Mopi books grouptest coretech \
+                     fosspicks tox pytwit latex omv shellshock mail-tut fractal \
+                     ninja olde masterclass random \
+                     lv009cover.png lv009cover-212x300.png
+
+download 010:2014/11 analysis distrohopper gaming10 letters lugs10 oggcamp linvwin \
+                     raspi patents donate openRisc ubuntu Fritz OpenBSD cardboard \
+                     book group10 sysadmin10 fosspicks10 i3 education markdown \
+                     systemd grub atlas julia ninja10 robocode master random \
+                     cover.jpg cover-211x300.jpg
+
+download 011:2014/12 news distros gaming11 letters lugs cloud freedom quiz outlaws \
+                     picademy faq iview laptop tor digikam vim FDE books web core \
+                     Foss backup arduino prey set wine samba cray firefox nosql \
+                     gpu mc random \
+                     lv11-large.png cover11-small-2.png
+
+download 012:2015/01 news games12 mail lugs12 2015 astropi eff pifac malware faq12 \
+                     interview audio fedora seafile kodi vmware book12 gt12 core12 \
+                     fosspicks12 audacity12 passwd12 openelec kmail regex12 unix12 \
+                     ardiono12 ninja12 ASM master12 random12 \
+                     Linux-Voice-Issue-012.png Linux-Voice-Issue-012-211x300.png
+
+download 013:2015/02 news distros gaming letters lugs fic pi2 bruce cyan profits \
+                     faq1 jono fsfe plasma lo icaros cube books gt ct fosspicks \
+                     audio edu ddresc irc shares lang arduino ninja asm mc random \
+                     lv13cover.png lv13cover-212x300.png
+
+download 014:2015/03 random masterclass asm notifications fortran roundcube \
+                     shares x86 vector javascript redshift fosspicks sysadmin \
+                     grouptest books ipython inkscape krita vlc xfce upton \
+                     faq lowrisc project cryptocurrencies ubuntuphone fosdem \
+                     lugs letters gaming distro news \
+		     cover14.png cover14-212x300.png
+
+download 015:2015/04 news distrohopper Gaming letters lugs hacking scribus \
+	             ia emulate node lwall ubuntu gnome slice audacity books1 \
+		     gt15 core15 fosspicks darktable pi15 gnuplot lyx puppet2 \
+		     enc algol ninja15 asm mc15 random \
+		     15cover.png 15cover-212x300.png
+
+download 016:2015/05 news16 distro16 gaming-16 Letters16 lugs16 distros film \
+                     switch Faq16 iview16 ardour-rev debian vscode plasma \
+		     synfig books16 Grouptest16 CoreTechnology16 fosspicks16 \
+		     ardour minecraft gps lisp16 docker16 python16 ninja16 \
+		     asm16 mc16 random16 \
+                     Linux-Voice-Issue-016.png Linux-Voice-Issue-016-212x300.png
+
+download 017:2015/06 news distro gaming mail lugs private winners suse kernel \
+                     faq iview cinnamon fedora octave onlyoffice scribus books \
+		     gt core foss connect wii snappy games ir batch cobol build \
+		     node mc random \
+                     Linux-Voice-Issue-017.png Linux-Voice-Issue-017-212x300.png
+
+download 018:2015/07 news distro18 gaming-18 mail lugs hacks privacy desktop \
+                     opendata faq18 iview-18 Ubuntu18 atom yubikey netbsd \
+		     Mint books18 gt18 ct18 fosspics 2f pi gol nginx drupal \
+		     walk c objects batsh mc-18 random \
+                     Linux-Voice-Issue-018-212x300.png Linux-Voice-Issue-018.png
+
+download 019:2015/08 news distro gaming letters lugd oscon uk obs win faq \
+                     iview lo vb draw geany shadow br gt ct fosspicks \
+		     keepassx pi wordpress grub kdenlive prolog ninja \
+                     profile mc random \
+		     Linux-Voice-Issue-019-HIGH-RES-212x300.png \
+		     Linux-Voice-Issue-019-HIGH-RES.png
+
+download 020:2015/09 news20 distro20 games201 mail20 suse20 desktop20 \
+                     build20 secrets20 games20 linuxcon20 faq20 iview20 \
+                     kde cyberfox20 picade20 books20 gt20 foss20 sync20 \
+		     edu20 blender20 yubikey godot ninja20 smalltalk20 \
+		     ct20 Random20 cover20.png cover20-212x300.png
+
+download 021:2015/10 news21 Distro21 letters21 freedom org21 firefoxc21 \
+                     android21 faq21 iview21 bitwig Gnome unity5 devolo \
+                     gol books21 gt21 fosspicks21 gitlab database21 \
+		     pi21 openvas2 head gitr rust ada ct21 devrandom \
+		     LinuxVoiceIssue021.png LinuxVoiceIssue021-212x300.png
+
+download 022:2015/11 news22 distro22 mail22 cover22 gift22 win22 sheband22 \
+                     faq222 interview22 fedora22 ubuntu22 owncloud22 tv22 \
+		     gaming22 books22 gt22 fosspicks22 shower22 keyboard22 \
+		     edu22 blue22 database22 minskey22 ninja22 haskell ct22 \
+		     random 22cover.png 22cover-212x300.png
+
+download 023:2015/12 news23 distro23 mail23 oggcamp home suse tor coreOS \
+                     faq23 iview23 phoronix camjam zero openelec gaming23 \
+		     books23 gt23 fosspicks23 oldandroid ardour gpio0 \
+		     ifttt rss asm23 ninja23 minsky ct23 random \
+		     23cover.png 23cover-212x300.png
+
+download 024:2016/02 news distro letters bier encrypt showcase secrets \
+                     snoopers faq Ardour tails wine node gaming books \
+		     gt fosspicks fog squid gpioxero mariadb lights \
+		     sed script random1 \
+		     24cover.png 24cover-212x300.png
+
+download 025:2016/02 news25 distro25 letters1 traphackers secrets25 fosdem2016 \
+                     owncloud comp elf desktop25 iview25 lo remix beef noise \
+		     gaming25 books25 grouptest fosspicks1 turtlesport photo25 \
+		     piartist sass light2 make qml wierd ct25 random2 \
+		     lv25cover.png lv25cover-212x300.png
+
+download 026:2016/03 distro26 letters26 desktop2016 pi3 secrets26 manifesto \
+                     zephyr iviewap netsurf openshot solus ocs9 gol26 books26 \
+		     GT26 fosspicks26 workrave onlyoffice pibasics juju \
+		     illuminate3 go future ct26 random \
+		     26cover.png 26cover-212x300.png
+
+download 027:2016/04 news27 distro27 letters ubuntu ms gimp cebit faqservo \
+                     iview27 microbit ubuntuMate openBSD gol27 books27 gt27 \
+		     fosspick27 openbazaar photo minecraft mediagoblin \
+		     vagrant rust27 git27 ct27 random \
+		     Linux-Voice-Issue-027-HIGH-RES.png \
+                     Linux-Voice-Issue-027-HIGH-RES-212x300.png
+
+download 028:2016/05 news28 distro8 letters28 master ms chrome lgm hadoop \
+	             iview28 brave new QT gaming28 books28 gt28 fosspicks \
+		     amahi bsd pi boot vpn container ai ct28 random \
+                     lv28cover.png lv28cover-212x300.png
+
+download 029:2016/06 news distro letters inside-the-kernel lo amarok pis \
+	             faq iview tails krita ghost lumo gaming books gt foss \
+		     steg hugo publish pi rsa elixir ct random \
+                     Lv29cover.png Lv29cover-212x300.png
+
+download 030:2016/08 news30 distro letters30 speedup newbie Secrets30 \
+	             Ardiuno faq iview30 fedora retropie fritz digikam \
+		     games30 books30 gt30 foss30 calibre publish barcode \
+		     ansible logfiles eb ct30 inside \
+                     Linux-Voice-Issue-030-HIGH-RES.png \
+		     Linux-Voice-Issue-030-HIGH-RES-212x300.png
+
+download 031:2016/08 news31 distro31 mail31 fedoranext retropi secrets31 \
+	             lumo oldandnew faq31 iview31 aftershotpro libreoffice52 \
+		     stellar books31 gt31 fp31 boinc veracrypt PyanPhys \
+		     imaging solr packaging ct31 Random \
+		     lv31.png lv31-212x300.png
+
+download 032:2016/10 news32 distro32 letters32 letters32 Privacy32 everywhere32 \
+	             secrets32 cool32 gnome32 faq-32 iview32 wireshark openbsd \
+		     elementary ardour gaming32 books32 grouptest fosspicks32 \
+		     cyanogenmod pi32 docker IRC crystal ct32 devRandom \
+		     Linux-Voice-Issue-032-HIGH-RES.png \
+                     Linux-Voice-Issue-032-HIGH-RES-212x300.png
+
+# whole-issue PDFs
+for i in {1..32}
+do
+  i=$(printf '%03d' $i)
+  download $i:issues  Linux-Voice-Issue-$i.pdf
+done
+
+# whole-issue EPUBs
+for i in 8 {11..16} {18..32}
+do
+  i=$(printf '%03d' $i)
+  download $i:issues  Linux-Voice-Issue-$i-{small,large}.epub
+done
+for i in 7 9 10
+do
+  i=$(printf '%03d' $i)
+  download $i:issues  Linux-Voice-Issue-$i.epub
+done
+download 017:issues  Linux-Voice-Issue-017-{small,big}.epub
