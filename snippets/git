@@ -91,3 +91,10 @@ git stash list
 
 # Stash hunk-by-hunk http://stackoverflow.com/a/17969785
 git stash -p
+
+# Nice explanation of internals
+http://www.shadabahmed.com/blog/2014/03/18/inside-git-guts/
+
+Git will call any executable found on the path that begins with `git-`,
+so if you create a shell script called `/usr/bin/git-foo` then you
+can do `git foo`.
