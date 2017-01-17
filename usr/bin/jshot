@@ -145,14 +145,14 @@ $(identify -ping "${wallpaper}" &> /dev/null) || abort "'${wallpaper}' is not an
 xwdfile=$(mktemp)
 xwd -frame > ${xwdfile}
 
-dims=$(identify -format "%wx%h" ${xwdfile})
+dims=$(identify -format "%wx%h" "xwd:${xwdfile}")
 w=${dims%x*}  # before the space is %w
 h=${dims##*x} # after the space is %h
 w=$(( w+border))
 h=$(( h+border))
 
 # compose image from screenshot and wallpaper
-convert ${wallpaper} ${xwdfile} -gravity center -crop "${w}x${h}+0+0" -compose over -composite -density 300 +repage ${format}:${outfile}
+convert ${wallpaper} xwd:${xwdfile} -gravity center -crop "${w}x${h}+0+0" -compose over -composite -density 300 +repage ${format}:${outfile}
 
 # Apply rounded corners if radius given
 # http://stackoverflow.com/a/1916256
@@ -173,7 +173,7 @@ then
   convert label:"${message}" ${format}:${msg}
   composite ${msg} ${outfile} -stegano +${message_offset} ${outfile}
   echo "Embedded message '${message}' at ${message_offset} pixels."
-  echo "Reveal with 'display -size $(identify -format "%wx%h+${message_offset}" "${msg}") stegano:${outfile}'"
+  echo "Reveal with 'display -size $(identify -format "%wx%h+${message_offset}" "${format}:${msg}") stegano:${outfile}'"
   rm "${msg}"
 fi
 
