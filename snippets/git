@@ -16,6 +16,15 @@ git add -u
 # Stage all changes, including deletes under a certain path, for example
 git add -u my/path
 
+# Undo last commit
+git reset HEAD~
+
+# Reuse last commit message (e.g. after undoing last commit)
+# http://stackoverflow.com/questions/16858069
+git commit --reuse-message=HEAD@{1}
+or
+git commit -C HEAD@{1}
+
 # Stage only deleted files
 # http://stackoverflow.com/a/1402800/712506
 git ls-files --deleted -z | xargs -0 git rm
@@ -98,3 +107,8 @@ http://www.shadabahmed.com/blog/2014/03/18/inside-git-guts/
 Git will call any executable found on the path that begins with `git-`,
 so if you create a shell script called `/usr/bin/git-foo` then you
 can do `git foo`.
+
+
+# GITHUB URL shorten
+$ curl -i https://git.io -F "url=https://gist.github.com/......."
+Location: https://git.io/vMXDa
