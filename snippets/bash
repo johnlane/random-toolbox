@@ -92,3 +92,14 @@ rm -rf *
 pdfjoin a.pdf b.pdf # creates b-joined.pdf
 pdfunite a.pdf b.pdf ab.pdf
 
+
+# iterate arguments
+# http://unix.stackexchange.com/questions/258512
+for arg in "$@"   # or just for arg do
+do                
+  shift
+  [ "$arg" = "unwanted arg" ] && continue
+  set -- "$@" "$arg"
+done
+
+printf '%s\n' "$@"
