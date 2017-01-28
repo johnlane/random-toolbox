@@ -112,3 +112,11 @@ can do `git foo`.
 # GITHUB URL shorten
 $ curl -i https://git.io -F "url=https://gist.github.com/......."
 Location: https://git.io/vMXDa
+
+# Git worktrees
+# allow a second directory off the same clone (multiple concurrent branches)
+# http://stackoverflow.com/a/30185564
+git worktree add ../some_dir some_branch
+
+# List worktrees
+git worktree list
