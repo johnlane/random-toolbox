@@ -1,0 +1,19 @@
+systemd
+=======
+
+Troubleshooting
+---------------
+
+Check state - a healthy state is "running"
+
+$ systemctl status
+State: degraded
+Jobs: 0 queued
+Failed: 1 units
+
+$ systemctl list-units --failed --no-pager -l
+ UNIT                           LOAD   ACTIVE SUB    DESCRIPTION
+* systemd-tmpfiles-setup.service loaded failed failed Create Volatile Files and Directories
+
+$ systemctl status -l systemd-tmpfiles-setup.service
+

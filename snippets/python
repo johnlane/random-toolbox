@@ -1,0 +1,5 @@
+Python snippets
+
+Check version from bash
+
+python -c 'import sys; sys.exit(sys.version_info[0]!=2)'

@@ -103,3 +103,10 @@ do
 done
 
 printf '%s\n' "$@"
+
+
+# check command exists
+# (preferable solutions instead of using 'which'
+# http://stackoverflow.com/questions/592620
+
+hash foo

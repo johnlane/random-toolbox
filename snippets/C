@@ -1,0 +1,11 @@
+C programming snippets
+----------------------
+
+/* print a buffer as a hex string */
+for (i = 0; i < buf_size; i++)                                                              
+{   
+  if (i > 0) printf(" ");
+  printf("%02x", buf[i]);
+}   
+printf("\n");
+

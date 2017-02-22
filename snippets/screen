@@ -1,0 +1,3 @@
+
+Kill session
+screen -X -S <session> kill

@@ -1,0 +1,6 @@
+Snippets for Android adb
+------------------------
+
+Copy files:
+
+adb shell ls /storage/emulated/legacy/DCIM/Camera/*.mp4 | tr '\r' ' ' | xargs -n1 adb pull

@@ -17,7 +17,13 @@ git add -u
 git add -u my/path
 
 # Undo last commit
-git reset HEAD~
+# http://stackoverflow.com/questions/3528245
+# whats-the-difference-between-git-reset-mixed-soft-and-hard
+git reset HEAD~        # reverts commit, clears index (e.g. back before `git add`)
+git reset --soft HEAD~ # reverts commit, leaves index (e.g. `git add` intact)
+
+# Redo last commit
+git commit -c ORIG_HEAD # new commit, reusing previous commit message
 
 # Reuse last commit message (e.g. after undoing last commit)
 # http://stackoverflow.com/questions/16858069
@@ -120,3 +126,9 @@ git worktree add ../some_dir some_branch
 
 # List worktrees
 git worktree list
+
+# List untracked files (e.g. to tar them up)
+tar cvf untracked.tar $(git ls-files --others --exclude-standard)
+
+# Delete untracked files and directories
+git clean -dfx

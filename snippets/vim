@@ -1,0 +1,6 @@
+VIM snippets
+
+#Visualise tabs
+# the listchars cause tabs to be replaced with >-, the latter repeated for trailing whitespace
+:set list
+:set listchars=tab:>-
