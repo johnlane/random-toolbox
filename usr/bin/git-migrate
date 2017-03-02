@@ -1,0 +1,100 @@
+#!/bin/sh
+#
+# A git migration script
+#
+# Copy specific files contained in one directory along with their
+# commit history into a new branch in a remote repository.
+#
+# Synopsis:
+#
+#     git-migrate file ... remote-uri
+#
+# This script is used in the donor git repository that contains the files given
+# on the command line. These files will be pushed to a new branch in the remote
+# repository given as the last command-line argument. The files are pushed with
+# their full history.including any previous file names (where files have been renamed
+#
+# Inspired by:
+# https://stosb.com/blog/retaining-history-when-moving-files-across-repositories-in-git
+#
+# JL20170302
+
+abort() { echo $*; exit 1; }
+
+# Tidy everything away when the time comes
+trap cleanup exit
+cleanup() {
+  rm -rf "$filter_script" "$WORKING_DIR"
+}
+
+# Help the confused
+[ -z "$*" ] && abort "Usage: $0 file ... remote-uri"
+
+# The last argument is the remote repository URI
+declare -r REMOTE_URI="${@: -1}"
+
+# Ensure remote exists
+git ls-remote "$REMOTE_URI" &>/dev/null || abort "Cannot access $REMOTE_URI"
+
+# The other arguments are the files to migrate
+set -- "${@:1:$(($#-1))}"
+
+# Check they all exist
+for f in "$@"
+do
+  [ -f "$f" ] || abort "Not found: $f"
+done
+
+# Only proceed if the local repository is clean
+[ -n "$(git status --porcelain --untracked-files=no)" ] && abort "Repository isn't clean (try 'git status')"
+
+declare -r ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+declare -r LOCAL=$(basename $(git rev-parse --show-toplevel))
+declare -r LOCAL_BRANCH="$LOCAL-$(date +'%Y%m%d%H%M%S%N')"
+declare -r REMOTE="$LOCAL_BRANCH" # an irrelevant transient name!
+declare -r REMOTE_BRANCH="$LOCAL_BRANCH"
+declare -r WORKING_DIR=$(basename $(mktemp -d -p .))
+
+# Ensure that the working directory is empty
+[ "$(ls -A "$WORKING_DIR")" ] && abort "$WORKING_DIR is not empty"
+
+# Add remote
+git remote add $REMOTE $REMOTE_URI
+
+# Check out local branch
+git checkout -b $LOCAL_BRANCH
+
+# Write the tree-filter script
+filter_script=$(mktemp) || abort "Could not create temporary file"
+chmod +x "$filter_script"
+echo '#!/bin/sh' > "$filter_script"
+echo "mkdir -p $WORKING_DIR/" >> "$filter_script"
+
+# Add file names to script, also include previous names of renamed files
+for f in "$@"
+do
+  for ff in $(git log --name-only --format=format: --follow -- "$f" | sort -u | sed -e '/^$/d')
+  do
+    echo mv "$ff"  $WORKING_DIR/ 2\>/dev/null >> "$filter_script"
+  done
+done
+
+echo true >> "$filter_script"
+
+# Move required files into the working directory, keeping their history
+git filter-branch -f --prune-empty --tree-filter "$filter_script" HEAD
+
+# Remove everything from the branch except for the working directory
+git filter-branch --prune-empty -f --subdirectory-filter "$WORKING_DIR"
+
+# Push to new branch on remote
+git push $REMOTE "$LOCAL_BRANCH:$REMOTE_BRANCH"
+
+# Remove remote
+git remote remove $REMOTE
+
+# Check out original branch
+git checkout $ORIGINAL_BRANCH
+
+# Remove checked out branch
+git branch -D $LOCAL_BRANCH
