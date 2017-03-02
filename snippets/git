@@ -132,3 +132,16 @@ tar cvf untracked.tar $(git ls-files --others --exclude-standard)
 
 # Delete untracked files and directories
 git clean -dfx
+
+# Download Github pull request as patch
+$ wget https://github.com/user/repo/pull/123/patch
+$ git am 123.patch
+
+# GI - ruby Github query tool
+# https://github.com/rafalchm/gi
+$ gem install gi
+$ gi execute --repo="rails/rails" "SELECT * FROM forks WHERE sort=stargazers,per_page=5"
+
+# Find all past names of a file
+git log --name-only --format=format: --follow -- dockbar-gtk2.py | sort -u
+
