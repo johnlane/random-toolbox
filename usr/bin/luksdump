@@ -33,8 +33,11 @@ def putfield(format,key,value)
   puts field
 end
 
-# accept LUKS volume as solitary command-line argument, otherwise assume a default
-VOLUME = ARGV.count == 1 ? ARGV[0] : 'test.luks'
+# accept LUKS volume as first command-line argument, otherwise assume a default
+VOLUME = ARGV.count >= 1 ? ARGV[0] : 'test.luks'
+
+# accept LUKS passphrase file as second command-line argument, otherwise use STDIN
+PASSPHRASE = ARGV.count >= 2 ? ARGV[1] : nil
 
 LUKS_MAGIC="LUKS"+0xba.chr+0xbe.chr
 LUKS_KEY_DISABLED = 0x0000DEAD
@@ -127,8 +130,17 @@ cipher_spec = 'aes-128-xts'
 cipher_block_size = 16 # bytes
 
 # Ask for pass phrase
-puts "Pass phrase?"
-passphrase=STDIN.gets.chomp
+if PASSPHRASE
+  begin
+    passphrase=File.read(PASSPHRASE, mode: 'rb')
+  rescue
+    abort "Unable to open '#{PASSPHRASE}'"
+  end
+else
+  puts "Pass phrase?"
+  passphrase=STDIN.gets.chomp
+end
+
 
 # Attempt master key recovery
 hdr[:key_slot].each do |ks|
