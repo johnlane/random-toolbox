@@ -65,6 +65,9 @@
 #                                                              #
 #    $ pinpass ?                                               #
 #                                                              #
+# Optional arguments:                                          #
+# -v verbose output                                            #
+#                                                              #
 ################################################################
 
 # Simple abortion
@@ -88,6 +91,18 @@ if [[ $# -eq 0 ]]; then
     echo "a new pin code will be randomly generated."
     abort "You must specify at least a PIN number"
 fi
+
+# Options
+while getopts 'v' opt
+do
+  case "${opt}" in
+    v) verbose=true
+  esac
+done
+shift $((OPTIND-1)) # Shift off the options and optional --
+
+# Defaults
+: ${verbose:=false}
 
 # The PIN should be a five digit number given in the first 
 # argument. If this is not a number then assume it is a URL and
@@ -156,7 +171,7 @@ do
 done
 
 # display pin and password phrase (password to follow)
-echo -n "$pin : ${password[@]} : "
+$verbose && echo -n "$pin : ${password[@]} : "
 
 #
 # Following rules apply to each word of password individually
@@ -214,4 +229,7 @@ fi
 #
 # Some stats
 #
-echo "Password is ${#password} characters long."
+if $verbose
+then
+  echo "Password is ${#password} characters long."
+fi
