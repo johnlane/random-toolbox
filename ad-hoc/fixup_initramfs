@@ -1,0 +1,15 @@
+#!/bin/sh
+# QAD fixup initramfs for cryptsetup units
+# fixes https://bbs.archlinux.org/viewtopic.php?id=229707
+#   bug https://bugs.archlinux.org/task/55535
+#                                             JL 20171030
+
+img=${1:-/boot/initramfs-linux.img}
+d=$(mktemp -d -p .) && (
+cd "$d"
+lsinitcpio -x "$img"
+ln -sf /etc/systemd/system/cryptsetup\@.service etc/systemd/system/cryptsetup.target.wants/cryptsetup@sda.service
+ln -sf /etc/systemd/system/cryptsetup\@.service etc/systemd/system/cryptsetup.target.wants/cryptsetup@sdb.service
+mv "$img"{,.$(date +%s)}
+find -mindepth 1 -printf '%P\0' | LANG=C bsdcpio -0 -o -H newc --quiet | gzip > "$img"
+) && rm -rf "$d"
