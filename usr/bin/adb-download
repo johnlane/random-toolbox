@@ -1,0 +1,29 @@
+#!/bin/sh
+# QAD script to download media from Android device
+# JL 20180416
+
+cleanup() {
+    [[ -n "$dest" ]] && cd "$OLDPWD" && rmdir --ignore-fail-on-non-empty "$dest"
+}
+trap cleanup EXIT
+
+# allow one optional argument, --move
+[[ "$1" == '--move' ]] && { move=true; shift; } || move=false
+[[ $# == 0 ]] || { echo "Usage: $0 [--move]"; exit 1; }
+
+TYPES=jpg,mp4
+DIRS=( /storage/emulated/0/DCIM/Camera
+       /storage/emulated/0/Pictures/Office\ Lens )
+dest=$(mktemp -d -p .) && cd $dest
+echo output directory: $(pwd)
+for dir in "${DIRS[@]}"
+do
+    if $move
+    then
+        echo moving from $dir
+        adb shell ls "'$dir'/*.{$TYPES}" 2>/dev/null | xargs -I{} -n 1 -d '\n' sh -c 'adb pull -a "$1" && adb shell rm "\"$1\"" && adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file://$1\" || exit 255' -- {} || break
+    else
+        echo copying from $dir
+        adb shell ls "'$dir'/*.{$TYPES}" 2>/dev/null | xargs -I{} -n 1 -d '\n' sh -c 'adb pull -a "$1" || exit 255' -- {} || break
+    fi
+done

@@ -49,6 +49,9 @@ and generate icons suitable for use with MediaTomb (http://mediatomb.cc)
 detach is a script wrapper for reptyr with tmux/screen/dtach to simplify
 detaching processes from the current terminal.
 
+adb-download can be used to download media from an Android device (it
+requires ADB).
+
 snippets - the files in this directory contain useful command snippets
 for shells, databases and other applications.
 
